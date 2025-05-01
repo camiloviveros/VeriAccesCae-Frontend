@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '../../lib/api';
+import Notifications from '../ui/Notifications';
 
 // Actualizado la importación de Heroicons
 import { 
   HomeIcon, UsersIcon, ShieldCheckIcon, 
-  DocumentTextIcon, BellIcon, ArrowRightOnRectangleIcon 
+  DocumentTextIcon, TruckIcon, ArrowRightOnRectangleIcon 
 } from '@heroicons/react/24/outline';
 
 type User = {
@@ -32,7 +33,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Cargar usuario del localStorage primero para rápido renderizado
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (err) {
+        console.error('Error parsing stored user:', err);
+        localStorage.removeItem('user');
+      }
     }
 
     // Verificar la sesión actual
@@ -42,6 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
       } catch (error) {
+        console.error('Session verification failed:', error);
         // Si hay error, limpiar el almacenamiento y redirigir al login
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -55,11 +62,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     verifySession();
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    router.push('/auth/login');
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Error during logout:', error);
+    } finally {
+      router.push('/auth/login');
+    }
   };
 
   // Elementos de navegación
@@ -67,6 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Control de Acceso', href: '/access', icon: ShieldCheckIcon },
     { name: 'Visitantes', href: '/access/visitors', icon: UsersIcon },
+    { name: 'Vehículos', href: '/parking/vehicles', icon: TruckIcon },
     { name: 'Seguridad', href: '/security', icon: ShieldCheckIcon },
     { name: 'Reportes', href: '/reports', icon: DocumentTextIcon },
   ];
@@ -123,17 +134,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {/* Espacio para búsqueda u otros controles */}
             </div>
             <div className="ml-4 flex items-center md:ml-6">
-              {/* Icono de notificaciones */}
-              <button className="rounded-full bg-white p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
-                <BellIcon className="h-6 w-6" aria-hidden="true" />
-              </button>
+              {/* Notificaciones */}
+              <Notifications />
 
               {/* Perfil de usuario */}
               <div className="relative ml-3">
                 <div className="flex items-center">
-                  <span className="mr-2 text-sm font-medium text-gray-700">
+                  <Link href="/auth/profile" className="mr-2 text-sm font-medium text-gray-700 hover:text-primary-600">
                     {user?.first_name} {user?.last_name}
-                  </span>
+                    <span className="text-xs text-gray-500 ml-1">
+                      ({user?.role?.name || 'Usuario'})
+                    </span>
+                  </Link>
                   <button 
                     onClick={handleLogout}
                     className="rounded-full bg-white p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"

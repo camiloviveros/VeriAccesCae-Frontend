@@ -4,21 +4,39 @@ import { useState, useEffect } from 'react';
 import DashboardLayout from '../../../../components/layout/DashboardLayout';
 import { authService } from '../../../../lib/api';
 import { getCurrentUser } from '../../../../lib/auth';
+import { Alert, AlertTitle, AlertDescription } from '../../../../components/ui/Alert';
+import { Button } from '../../../../components/ui/Button';
 
+// Definición completa de la interfaz User con todas las propiedades posibles
 interface User {
+  id: number;
   username?: string;
   first_name?: string;
   last_name?: string;
   email?: string;
-  phone?: string;
+  phone?: string; // Añadida propiedad phone
+  is_active?: boolean;
+  is_staff?: boolean;
+  date_joined?: string;
+  last_login?: string;
   role?: {
+    id?: number;
     name?: string;
   };
+  // Campo indexado para permitir acceso a propiedades no listadas explícitamente
+  [key: string]: any;
+}
+
+interface FormData {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
 }
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     first_name: '',
     last_name: '',
     email: '',
@@ -33,8 +51,23 @@ export default function ProfilePage() {
     const fetchUserProfile = async () => {
       try {
         setLoading(true);
-        const userData = (await authService.getCurrentUser()) as User;
+        
+        // Intentar obtener datos del localStorage primero para rápido renderizado
+        const storedUser = getCurrentUser();
+        if (storedUser) {
+          setUser(storedUser);
+          setFormData({
+            first_name: storedUser.first_name || '',
+            last_name: storedUser.last_name || '',
+            email: storedUser.email || '',
+            phone: storedUser.phone || ''
+          });
+        }
+        
+        // Actualizar desde la API
+        const userData = await authService.getCurrentUser();
         setUser(userData);
+        
         // Inicializar el formulario con datos del usuario
         setFormData({
           first_name: userData.first_name || '',
@@ -49,18 +82,6 @@ export default function ProfilePage() {
         setLoading(false);
       }
     };
-
-    // Intentar obtener datos del localStorage primero para rápido renderizado
-    const storedUser = getCurrentUser();
-    if (storedUser) {
-      setUser(storedUser);
-      setFormData({
-        first_name: storedUser.first_name || '',
-        last_name: storedUser.last_name || '',
-        email: storedUser.email || '',
-        phone: storedUser.phone || ''
-      });
-    }
 
     fetchUserProfile();
   }, []);
@@ -80,13 +101,43 @@ export default function ProfilePage() {
     setSuccess('');
     
     try {
-      const updatedUser = (await authService.updateProfile(formData)) as User;
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      const updatedUser = await authService.updateProfile(formData);
+      
+      // Actualizar el estado y localStorage
+      setUser(prev => {
+        if (!prev) return updatedUser;
+        return {
+          ...prev,
+          ...updatedUser
+        };
+      });
+      
+      // Actualizar localStorage con los datos actualizados
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const updatedLocalUser = {
+          ...currentUser,
+          ...updatedUser
+        };
+        localStorage.setItem('user', JSON.stringify(updatedLocalUser));
+      }
+      
       setSuccess('Perfil actualizado correctamente');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating profile:', err);
-      setError('No se pudo actualizar el perfil');
+      
+      if (err.response?.data) {
+        if (typeof err.response.data === 'string') {
+          setError(err.response.data);
+        } else if (typeof err.response.data === 'object') {
+          const errorMessages = Object.entries(err.response.data)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('; ');
+          setError(errorMessages || 'No se pudo actualizar el perfil');
+        }
+      } else {
+        setError('No se pudo actualizar el perfil');
+      }
     } finally {
       setUpdating(false);
     }
@@ -98,23 +149,17 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-semibold text-gray-900">Mi Perfil</h1>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">{error}</h3>
-              </div>
-            </div>
-          </div>
+          <Alert variant="error">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         {success && (
-          <div className="rounded-md bg-green-50 p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-green-800">{success}</h3>
-              </div>
-            </div>
-          </div>
+          <Alert variant="success">
+            <AlertTitle>Éxito</AlertTitle>
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
         )}
 
         {loading ? (
@@ -202,13 +247,13 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="px-4 py-3 bg-gray-50 text-right sm:px-6">
-                  <button
+                  <Button
                     type="submit"
+                    isLoading={updating}
                     disabled={updating}
-                    className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                   >
                     {updating ? 'Guardando...' : 'Guardar'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>

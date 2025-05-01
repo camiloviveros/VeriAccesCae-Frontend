@@ -5,19 +5,22 @@ import { useRouter } from 'next/navigation';
 import { accessService } from '../../lib/api';
 
 type AccessPointFormProps = {
-  accessPointId?: string;
+  accessPointId?: string | number;
   isEdit?: boolean;
 };
 
-// Definir tipo para los puntos de acceso
-type AccessPoint = {
-  id: string;
+// Actualizado para coincidir con AccessPointResponse de lib/api.ts
+interface AccessPoint {
+  id: number;           // Cambiado de string a number para coincidir con la respuesta de la API
   name?: string;
   description?: string;
   location?: string;
   max_capacity?: number;
   is_active?: boolean;
-};
+  current_count?: number;
+  created_at?: string;
+  [key: string]: any;   // Permitir otras propiedades que pueda tener la respuesta
+}
 
 type FormDataType = {
   name: string;
@@ -45,10 +48,25 @@ export default function AccessPointForm({ accessPointId, isEdit = false }: Acces
       if (isEdit && accessPointId) {
         try {
           setInitialLoading(true);
-          // Corregido: Añadir tipo a accessPoints
-          const accessPoints = await accessService.getAccessPoints() as AccessPoint[];
           
-          const accessPoint = accessPoints.find((point: AccessPoint) => point.id === accessPointId);
+          // Obtener los puntos de acceso
+          const response = await accessService.getAccessPoints();
+          
+          // Procesar la respuesta adecuadamente dependiendo de su formato
+          let accessPoints: AccessPoint[] = [];
+          
+          if (Array.isArray(response)) {
+            // Si es un array directo de puntos de acceso
+            accessPoints = response;
+          } else if (response.results && Array.isArray(response.results)) {
+            // Si es una respuesta paginada
+            accessPoints = response.results;
+          }
+          
+          // Buscar el punto de acceso específico
+          // Convertir accessPointId a número si es una cadena para comparación consistente
+          const idToFind = typeof accessPointId === 'string' ? parseInt(accessPointId, 10) : accessPointId;
+          const accessPoint = accessPoints.find(point => point.id === idToFind);
           
           if (accessPoint) {
             setFormData({
@@ -87,18 +105,13 @@ export default function AccessPointForm({ accessPointId, isEdit = false }: Acces
     setError('');
     
     try {
-      // Corregido: Añadir tipo a accessPoints
       if (isEdit && accessPointId) {
-        const accessPoints = await accessService.getAccessPoints() as AccessPoint[];
-        const updatedAccessPoints = accessPoints.map((point: AccessPoint) => 
-          point.id === accessPointId ? { ...point, ...formData } : point
-        );
-        // Aquí deberías tener un método para guardar los puntos actualizados
-        // Como no existe, puedes crear este método en tu API
+        // Aquí idealmente habría un método en tu API para actualizar un punto de acceso
+        // Por ejemplo: await accessService.updateAccessPoint(accessPointId, formData);
         console.log('Actualizando punto de acceso:', accessPointId, formData);
       } else {
-        // Implementación provisional para crear un punto de acceso
-        // Esto también dependerá de tu API real
+        // Aquí idealmente habría un método en tu API para crear un punto de acceso
+        // Por ejemplo: await accessService.createAccessPoint(formData);
         console.log('Creando nuevo punto de acceso:', formData);
       }
       router.push('/access');

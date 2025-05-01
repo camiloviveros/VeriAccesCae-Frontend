@@ -6,18 +6,24 @@ interface JwtToken {
   [key: string]: any;
 }
 
+// Actualizada la interfaz User para incluir todas las propiedades necesarias
 interface User {
   id: number;
   username: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  is_staff: boolean;
-  is_superuser: boolean;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string; // Añadida la propiedad phone
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  is_active?: boolean;
+  date_joined?: string;
+  last_login?: string;
   role?: {
     id: number;
     name: string;
   };
+  [key: string]: any; // Para permitir propiedades adicionales
 }
 
 /**

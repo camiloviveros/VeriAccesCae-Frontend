@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import DashboardLayout from '../../../../../../components/layout/DashboardLayout';
 import { accessService } from '../../../../../../lib/api';
+import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
+import { Button } from '../../../../../../components/ui/Button';
 import Image from 'next/image';
 
 // Definición de tipos
@@ -30,13 +32,23 @@ type VisitorAccessData = {
   access_zones: number[];
 };
 
+// Definir el tipo para la respuesta de creación de acceso de visitante
+interface VisitorAccessResponse {
+  id: number;
+  visitor: number;
+  host: number;
+  purpose: string;
+  valid_from: string;
+  valid_to: string;
+  qr_code: string;
+  is_used: boolean;
+  created_at: string;
+  [key: string]: any; // Para cualquier propiedad adicional
+}
+
 type QRCodeResponse = {
   qr_code_image: string;
 };
-
-type AccessZonesResponse = {
-  results?: AccessZone[];
-} | AccessZone[];
 
 export default function CreateVisitorAccessPage() {
   const params = useParams();
@@ -63,23 +75,35 @@ export default function CreateVisitorAccessPage() {
         setLoading(true);
         
         // Obtener información del visitante
-        const visitorResponse = await accessService.getVisitors();
-        // Filtrar el visitante específico basado en el ID
-        const foundVisitor = Array.isArray(visitorResponse) 
-          ? visitorResponse.find(v => v.id.toString() === visitorId)
-          : null;
+        const visitorsResponse = await accessService.getVisitors();
+        
+        // Determinar si es un array o una respuesta paginada
+        let visitors: Visitor[] = [];
+        if (Array.isArray(visitorsResponse)) {
+          visitors = visitorsResponse;
+        } else if (visitorsResponse && visitorsResponse.results) {
+          visitors = visitorsResponse.results;
+        }
+        
+        // Encontrar el visitante específico
+        const foundVisitor = visitors.find(v => v.id.toString() === visitorId);
         
         if (!foundVisitor) {
           throw new Error('Visitante no encontrado');
         }
         
-        setVisitor(foundVisitor as Visitor);
+        setVisitor(foundVisitor);
         
         // Obtener zonas de acceso disponibles
-        const zonesResponse = await accessService.getAccessZones() as AccessZonesResponse;
-        const zones = Array.isArray(zonesResponse) 
-          ? zonesResponse 
-          : (zonesResponse.results || []);
+        const zonesResponse = await accessService.getAccessZones();
+        
+        // Determinar si es un array o una respuesta paginada
+        let zones: AccessZone[] = [];
+        if (Array.isArray(zonesResponse)) {
+          zones = zonesResponse;
+        } else if (zonesResponse && zonesResponse.results) {
+          zones = zonesResponse.results;
+        }
         
         setAccessZones(zones);
       } catch (err) {
@@ -93,7 +117,7 @@ export default function CreateVisitorAccessPage() {
     fetchData();
   }, [visitorId]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -121,15 +145,46 @@ export default function CreateVisitorAccessPage() {
     setError('');
     
     try {
+      // Verificar que se han seleccionado zonas de acceso
+      if (formData.access_zones.length === 0) {
+        throw new Error('Debe seleccionar al menos una zona de acceso');
+      }
+      
       // Crear el acceso del visitante
-      const response = await accessService.createVisitorAccess(formData);
+      const response = await accessService.createVisitorAccess(formData) as VisitorAccessResponse;
+      
+      // Verificar que la respuesta tiene el formato esperado
+      if (!response || typeof response !== 'object' || !('id' in response)) {
+        console.error('Respuesta inválida:', response);
+        throw new Error('Error al crear el acceso de visitante: respuesta inválida');
+      }
       
       // Obtener el código QR
-      const qrResponse = await accessService.getQRCode((response as {id: string | number}).id) as QRCodeResponse;
+      const qrResponse = await accessService.getQRCode(response.id) as QRCodeResponse;
+      
+      if (!qrResponse || !qrResponse.qr_code_image) {
+        throw new Error('Error al obtener el código QR');
+      }
+      
       setQrCode(qrResponse.qr_code_image);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating visitor access:', err);
-      setError((err as {response?: {data?: {error?: string}}}).response?.data?.error || 'Error al crear acceso para el visitante');
+      
+      // Manejar diferentes tipos de errores
+      if (err.message) {
+        setError(err.message);
+      } else if (err.response?.data) {
+        if (typeof err.response.data === 'string') {
+          setError(err.response.data);
+        } else if (typeof err.response.data === 'object') {
+          const errorMessages = Object.entries(err.response.data)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('; ');
+          setError(errorMessages || 'Error al crear acceso para el visitante');
+        }
+      } else {
+        setError('Error al crear acceso para el visitante');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -153,13 +208,10 @@ export default function CreateVisitorAccessPage() {
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">{error}</h3>
-              </div>
-            </div>
-          </div>
+          <Alert variant="error">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         {qrCode ? (
@@ -175,13 +227,11 @@ export default function CreateVisitorAccessPage() {
                 </p>
               </div>
               <div className="mt-5">
-                <button
-                  type="button"
+                <Button
                   onClick={() => router.push('/access/visitors')}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                 >
                   Volver a Visitantes
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -296,20 +346,21 @@ export default function CreateVisitorAccessPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
                     onClick={() => router.push('/access/visitors')}
-                    className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    className="mr-3"
                   >
                     Cancelar
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
+                    isLoading={submitting}
                     disabled={submitting}
-                    className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-300"
                   >
                     {submitting ? 'Creando...' : 'Crear Acceso'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>

@@ -6,10 +6,12 @@ import { accessService } from '../../lib/api';
 // Definir interfaces para los tipos
 interface UserDetail {
   username?: string;
+  full_name?: string;
 }
 
 interface AccessPointDetail {
   name?: string;
+  location?: string;
 }
 
 interface AccessLog {
@@ -24,6 +26,7 @@ interface AccessLog {
 // Definir interface para la respuesta del servicio
 interface AccessLogsResponse {
   results?: AccessLog[];
+  count?: number;
 }
 
 export default function LiveMonitoring() {
@@ -37,8 +40,16 @@ export default function LiveMonitoring() {
   // Función para cargar los logs de acceso recientes
   const fetchLogs = async () => {
     try {
+      setLoading(true);
       const response = await accessService.getAccessLogs({ limit: 10 }) as AccessLogsResponse;
-      setAccessLogs(response.results || []);
+      if (response && response.results) {
+        setAccessLogs(response.results);
+      } else if (Array.isArray(response)) {
+        setAccessLogs(response.slice(0, 10));
+      } else {
+        console.warn('Formato de respuesta inesperado:', response);
+        setAccessLogs([]);
+      }
       setError('');
     } catch (err) {
       console.error('Error fetching access logs:', err);
@@ -122,7 +133,7 @@ export default function LiveMonitoring() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
-                        {log.user_detail?.username || 'Visitante'} en {log.access_point_detail?.name || 'Punto de acceso'}
+                        {log.user_detail?.full_name || log.user_detail?.username || 'Visitante'} en {log.access_point_detail?.name || 'Punto de acceso'}
                       </p>
                       <p className="text-sm text-gray-500 truncate">
                         {new Date(log.timestamp).toLocaleString()} - {log.direction === 'in' ? 'Entrada' : 'Salida'}

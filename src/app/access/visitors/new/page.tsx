@@ -4,6 +4,8 @@ import { useState, ChangeEvent, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../../components/layout/DashboardLayout';
 import { accessService } from '../../../../../lib/api';
+import { Alert, AlertTitle, AlertDescription } from '../../../../../components/ui/Alert';
+import { Button } from '../../../../../components/ui/Button';
 
 interface FormData {
   first_name: string;
@@ -13,16 +15,6 @@ interface FormData {
   email: string;
   company: string;
   photo: File | null;
-}
-
-interface VisitorAccessData {
-  first_name: string;
-  last_name: string;
-  id_number: string;
-  phone: string;
-  email: string;
-  company: string;
-  photo?: File;
 }
 
 export default function NewVisitorPage() {
@@ -73,23 +65,46 @@ export default function NewVisitorPage() {
     setError('');
     
     try {
-      // Preparar los datos para enviar
-      const visitorData: VisitorAccessData = {
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        id_number: formData.id_number,
-        phone: formData.phone,
-        email: formData.email,
-        company: formData.company,
-        ...(formData.photo && { photo: formData.photo })
-      };
+      // Crear un FormData para enviar correctamente los datos con archivos
+      const formDataToSend = new FormData();
+      
+      // Añadir cada campo al FormData
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          if (key === 'photo' && value instanceof File) {
+            formDataToSend.append(key, value);
+          } else if (typeof value === 'string') {
+            formDataToSend.append(key, value);
+          }
+        }
+      });
 
-      // Usar createVisitorAccess en lugar de createVisitor
-      await accessService.createVisitorAccess(visitorData);
+      // Llamar a la API para crear un visitante
+      await accessService.createVisitor(formDataToSend);
       router.push('/access/visitors');
     } catch (err: unknown) {
       console.error('Error creating visitor:', err);
-      setError(err instanceof Error ? err.message : 'Error al registrar visitante');
+      
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (typeof err === 'object' && err !== null && 'response' in err) {
+        const axiosError = err as { response?: { data?: any } };
+        if (axiosError.response?.data) {
+          if (typeof axiosError.response.data === 'string') {
+            setError(axiosError.response.data);
+          } else if (typeof axiosError.response.data === 'object') {
+            // Formatear errores de validación
+            const errorMessages = Object.entries(axiosError.response.data)
+              .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+              .join('; ');
+            setError(errorMessages || 'Error al registrar visitante');
+          }
+        } else {
+          setError('Error al registrar visitante');
+        }
+      } else {
+        setError('Error al registrar visitante');
+      }
     } finally {
       setLoading(false);
     }
@@ -103,13 +118,10 @@ export default function NewVisitorPage() {
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">{error}</h3>
-              </div>
-            </div>
-          </div>
+          <Alert variant="error">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <div className="bg-white shadow sm:rounded-lg">
@@ -249,20 +261,21 @@ export default function NewVisitorPage() {
               </div>
 
               <div className="flex justify-end">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => router.push('/access/visitors')}
-                  className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  className="mr-3"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
+                  isLoading={loading}
                   disabled={loading}
-                  className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-300"
                 >
                   {loading ? 'Guardando...' : 'Guardar'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
