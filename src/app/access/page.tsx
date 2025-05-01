@@ -4,168 +4,158 @@ import { useState, useEffect } from 'react';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import { accessService } from '../../../lib/api';
 import Link from 'next/link';
+import { Alert, AlertTitle } from '../../../components/ui/Alert';
+import { Loading } from '../../../components/ui/Loading';
 
-// Definición de tipos
-interface AccessPoint {
-  id: string | number;
-  name: string;
-  location: string;
-  is_active: boolean;
-  max_capacity: number;
-  current_count: number;
-  // Agrega otras propiedades que puedan existir
+interface Visitor {
+  id: number;
+  id_number: string;
+  first_name: string;
+  last_name: string;
+  photo?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
 }
 
 interface ApiResponse {
-  results?: AccessPoint[];
-  // Otras propiedades que pueda tener la respuesta
-  [key: string]: any;
+  results?: Visitor[];
+  count?: number;
 }
 
-type RemoteControlAction = 'lock' | 'unlock';
-
-export default function AccessPointsPage() {
-  const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
+export default function VisitorsPage() {
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchAccessPoints = async () => {
+    const fetchVisitors = async () => {
       try {
         setLoading(true);
-        const response = await accessService.getAccessPoints() as ApiResponse | AccessPoint[];
+        const response = await accessService.getVisitors();
         
-        // Manejo seguro de la respuesta
-        let data: AccessPoint[] = [];
-        
+        // Determinar el tipo de respuesta y extraer los visitantes
+        let visitorsList: Visitor[] = [];
         if (Array.isArray(response)) {
-          // Si la respuesta es directamente un array
-          data = response;
-        } else if (response?.results && Array.isArray(response.results)) {
-          // Si la respuesta tiene propiedad results
-          data = response.results;
+          visitorsList = response;
+        } else if (response && response.results && Array.isArray(response.results)) {
+          visitorsList = response.results;
         } else if (response && typeof response === 'object') {
-          // Si es un objeto pero no tiene results, convertirlo a array
-          data = Object.values(response).filter(item => 
-            typeof item === 'object' && item !== null
-          ) as AccessPoint[];
+          // Intentar extraer visitantes si la respuesta es un objeto pero no con el formato esperado
+          const possibleVisitors = Object.values(response).filter(val => 
+            typeof val === 'object' && val !== null && 'id' in val && 'first_name' in val && 'last_name' in val
+          );
+          visitorsList = possibleVisitors as Visitor[];
         }
         
-        setAccessPoints(data);
+        setVisitors(visitorsList);
       } catch (err) {
-        console.error('Error fetching access points:', err);
-        setError('No se pudieron cargar los puntos de acceso');
+        console.error('Error fetching visitors:', err);
+        setError('No se pudieron cargar los visitantes');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAccessPoints();
+    fetchVisitors();
   }, []);
-
-  const handleRemoteControl = async (id: string | number, action: RemoteControlAction) => {
-    try {
-      // Aserción de tipo temporal - deberías actualizar la definición de accessService
-      await (accessService as any).remoteControl(id, action);
-      
-      // Actualizar la lista después de la acción
-      const response = await accessService.getAccessPoints() as ApiResponse | AccessPoint[];
-      
-      // Mismo manejo de respuesta que en el useEffect
-      let data: AccessPoint[] = [];
-      if (Array.isArray(response)) {
-        data = response;
-      } else if (response?.results) {
-        data = response.results;
-      } else if (response && typeof response === 'object') {
-        data = Object.values(response).filter(item => 
-          typeof item === 'object' && item !== null
-        ) as AccessPoint[];
-      }
-      
-      setAccessPoints(data);
-    } catch (err) {
-      console.error(`Error ${action === 'lock' ? 'locking' : 'unlocking'} access point:`, err);
-      setError(`No se pudo ${action === 'lock' ? 'bloquear' : 'desbloquear'} el punto de acceso`);
-    }
-  };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900">Puntos de Acceso</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Visitantes</h1>
           <Link 
-            href="/access/new" 
+            href="/access/visitors/new" 
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           >
-            Nuevo Punto de Acceso
+            Registrar Nuevo Visitante
           </Link>
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">{error}</h3>
-              </div>
-            </div>
-          </div>
+          <Alert variant="error">
+            <AlertTitle>Error</AlertTitle>
+            {error}
+          </Alert>
         )}
 
         <div className="bg-white shadow overflow-hidden sm:rounded-md">
           {loading ? (
-            <div className="p-6 animate-pulse space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-200 rounded"></div>
-              ))}
+            <div className="flex items-center justify-center py-10">
+              <Loading size="lg" message="Cargando visitantes..." />
             </div>
-          ) : accessPoints.length > 0 ? (
+          ) : visitors.length > 0 ? (
             <ul className="divide-y divide-gray-200">
-              {accessPoints.map((accessPoint) => (
-                <li key={accessPoint.id}>
+              {visitors.map((visitor) => (
+                <li key={visitor.id}>
                   <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900">{accessPoint.name}</h3>
-                        <p className="mt-1 text-sm text-gray-500">{accessPoint.location}</p>
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-gray-100">
+                        {visitor.photo ? (
+                          // Usar img nativo en lugar de Image para evitar problemas con la configuración de Next.js
+                          <img 
+                            src={visitor.photo}
+                            alt={`${visitor.first_name} ${visitor.last_name}`}
+                            className="h-12 w-12 object-cover"
+                            onError={(e) => {
+                              // Ocultar la imagen si falla la carga
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              // Mostrar el icono por defecto
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                parent.innerHTML = `<svg class="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>`;
+                              }
+                            }}
+                          />
+                        ) : (
+                          <svg className="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                          </svg>
+                        )}
                       </div>
-                      <div className="flex space-x-2">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          accessPoint.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {accessPoint.is_active ? 'Activo' : 'Inactivo'}
-                        </span>
-                        
-                        <button
-                          onClick={() => handleRemoteControl(accessPoint.id, accessPoint.is_active ? 'lock' : 'unlock')}
-                          className={`px-3 py-1 text-xs font-medium rounded ${
-                            accessPoint.is_active 
-                              ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                              : 'bg-green-50 text-green-700 hover:bg-green-100'
-                          }`}
-                        >
-                          {accessPoint.is_active ? 'Bloquear' : 'Desbloquear'}
-                        </button>
-                        
-                        <Link
-                          href={`/access/${accessPoint.id}`}
-                          className="px-3 py-1 text-xs font-medium rounded bg-gray-50 text-gray-700 hover:bg-gray-100"
-                        >
-                          Detalles
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="mt-2 sm:flex sm:justify-between">
-                      <div className="sm:flex">
-                        <p className="flex items-center text-sm text-gray-500">
-                          <span>Capacidad: {accessPoint.max_capacity > 0 ? accessPoint.max_capacity : 'Sin límite'}</span>
-                        </p>
-                      </div>
-                      <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                        <p>
-                          Ocupación actual: {accessPoint.current_count} {accessPoint.max_capacity > 0 && `(${Math.round(accessPoint.current_count / accessPoint.max_capacity * 100)}%)`}
-                        </p>
+                      <div className="ml-4 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-indigo-600 truncate">
+                            {visitor.first_name} {visitor.last_name}
+                          </p>
+                          <div className="ml-2 flex-shrink-0 flex">
+                            <Link
+                              href={`/access/visitors/${visitor.id}`}
+                              className="px-3 py-1 text-xs font-medium rounded bg-gray-50 text-gray-700 hover:bg-gray-100"
+                            >
+                              Ver Detalles
+                            </Link>
+                            <Link
+                              href={`/access/visitors/${visitor.id}/access`}
+                              className="ml-2 px-3 py-1 text-xs font-medium rounded bg-primary-50 text-primary-700 hover:bg-primary-100"
+                            >
+                              Crear Acceso
+                            </Link>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500">
+                              ID: {visitor.id_number}
+                            </p>
+                            {visitor.company && (
+                              <p className="text-sm text-gray-500">
+                                Empresa: {visitor.company}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {visitor.email && (
+                              <p>{visitor.email}</p>
+                            )}
+                            {visitor.phone && (
+                              <p>{visitor.phone}</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -174,7 +164,7 @@ export default function AccessPointsPage() {
             </ul>
           ) : (
             <div className="p-6 text-center text-gray-500">
-              No hay puntos de acceso disponibles.
+              No hay visitantes registrados. Utiliza el botón "Registrar Nuevo Visitante" para añadir uno.
             </div>
           )}
         </div>

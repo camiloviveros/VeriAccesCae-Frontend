@@ -1,200 +1,98 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../../../components/layout/DashboardLayout';
 import { accessService } from '../../../../../../lib/api';
-import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
 import { Button } from '../../../../../../components/ui/Button';
-import Image from 'next/image';
+import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
+import { Badge } from '../../../../../../components/ui/Badge';
+import { Loading } from '../../../../../../components/ui/Loading';
 
-// Definición de tipos
-type Visitor = {
+interface Visitor {
   id: number;
   first_name: string;
   last_name: string;
   id_number: string;
+  phone?: string;
+  email?: string;
   company?: string;
   photo?: string;
-};
-
-type AccessZone = {
-  id: number;
-  name: string;
-};
-
-type VisitorAccessData = {
-  visitor: string | number;
-  purpose: string;
-  valid_from: string;
-  valid_to: string;
-  access_zones: number[];
-};
-
-// Definir el tipo para la respuesta de creación de acceso de visitante
-interface VisitorAccessResponse {
-  id: number;
-  visitor: number;
-  host: number;
-  purpose: string;
-  valid_from: string;
-  valid_to: string;
-  qr_code: string;
-  is_used: boolean;
   created_at: string;
-  [key: string]: any; // Para cualquier propiedad adicional
 }
 
-type QRCodeResponse = {
-  qr_code_image: string;
-};
+interface VisitorAccess {
+  id: number;
+  purpose: string;
+  valid_from: string;
+  valid_to: string;
+  is_used: boolean;
+  access_zones_detail?: { id: number; name: string }[];
+  host_detail?: { username: string; full_name?: string };
+  created_at: string;
+}
 
-export default function CreateVisitorAccessPage() {
+export default function VisitorDetailPage() {
   const params = useParams();
-  const visitorId = params.id as string;
   const router = useRouter();
-  
+  const visitorId = params.id as string;
+
   const [visitor, setVisitor] = useState<Visitor | null>(null);
-  const [accessZones, setAccessZones] = useState<AccessZone[]>([]);
-  const [formData, setFormData] = useState<VisitorAccessData>({
-    visitor: visitorId,
-    purpose: '',
-    valid_from: new Date().toISOString().slice(0, 16),
-    valid_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
-    access_zones: []
-  });
+  const [visitorAccesses, setVisitorAccesses] = useState<VisitorAccess[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [qrCode, setQrCode] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchVisitorDetails = async () => {
       try {
         setLoading(true);
+        setError('');
         
-        // Obtener información del visitante
+        // Obtener todos los visitantes
         const visitorsResponse = await accessService.getVisitors();
         
-        // Determinar si es un array o una respuesta paginada
+        // Determinar si la respuesta es un array o una respuesta paginada
         let visitors: Visitor[] = [];
         if (Array.isArray(visitorsResponse)) {
           visitors = visitorsResponse;
-        } else if (visitorsResponse && visitorsResponse.results) {
+        } else if (visitorsResponse && visitorsResponse.results && Array.isArray(visitorsResponse.results)) {
           visitors = visitorsResponse.results;
+        } else if (visitorsResponse && typeof visitorsResponse === 'object') {
+          // Intentar extraer visitantes si la respuesta es un objeto pero no con el formato esperado
+          const possibleVisitors = Object.values(visitorsResponse).filter(val => 
+            typeof val === 'object' && val !== null && 'id' in val && 'first_name' in val && 'last_name' in val
+          );
+          visitors = possibleVisitors as Visitor[];
         }
         
         // Encontrar el visitante específico
         const foundVisitor = visitors.find(v => v.id.toString() === visitorId);
         
-        if (!foundVisitor) {
-          throw new Error('Visitante no encontrado');
+        if (foundVisitor) {
+          setVisitor(foundVisitor);
+          
+          // Aquí podríamos obtener los accesos del visitante si hay un endpoint para ello
+          // Por ahora, dejamos un array vacío
+          setVisitorAccesses([]);
+        } else {
+          setError('Visitante no encontrado');
         }
-        
-        setVisitor(foundVisitor);
-        
-        // Obtener zonas de acceso disponibles
-        const zonesResponse = await accessService.getAccessZones();
-        
-        // Determinar si es un array o una respuesta paginada
-        let zones: AccessZone[] = [];
-        if (Array.isArray(zonesResponse)) {
-          zones = zonesResponse;
-        } else if (zonesResponse && zonesResponse.results) {
-          zones = zonesResponse.results;
-        }
-        
-        setAccessZones(zones);
       } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('No se pudo cargar la información necesaria');
+        console.error('Error fetching visitor details:', err);
+        setError('No se pudo cargar la información del visitante');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchVisitorDetails();
   }, [visitorId]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleZonesChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const { options } = e.target;
-    const selectedZones: number[] = [];
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].selected) {
-        selectedZones.push(parseInt(options[i].value));
-      }
-    }
-    setFormData((prev) => ({
-      ...prev,
-      access_zones: selectedZones
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError('');
-    
-    try {
-      // Verificar que se han seleccionado zonas de acceso
-      if (formData.access_zones.length === 0) {
-        throw new Error('Debe seleccionar al menos una zona de acceso');
-      }
-      
-      // Crear el acceso del visitante
-      const response = await accessService.createVisitorAccess(formData) as VisitorAccessResponse;
-      
-      // Verificar que la respuesta tiene el formato esperado
-      if (!response || typeof response !== 'object' || !('id' in response)) {
-        console.error('Respuesta inválida:', response);
-        throw new Error('Error al crear el acceso de visitante: respuesta inválida');
-      }
-      
-      // Obtener el código QR
-      const qrResponse = await accessService.getQRCode(response.id) as QRCodeResponse;
-      
-      if (!qrResponse || !qrResponse.qr_code_image) {
-        throw new Error('Error al obtener el código QR');
-      }
-      
-      setQrCode(qrResponse.qr_code_image);
-    } catch (err: any) {
-      console.error('Error creating visitor access:', err);
-      
-      // Manejar diferentes tipos de errores
-      if (err.message) {
-        setError(err.message);
-      } else if (err.response?.data) {
-        if (typeof err.response.data === 'string') {
-          setError(err.response.data);
-        } else if (typeof err.response.data === 'object') {
-          const errorMessages = Object.entries(err.response.data)
-            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
-            .join('; ');
-          setError(errorMessages || 'Error al crear acceso para el visitante');
-        }
-      } else {
-        setError('Error al crear acceso para el visitante');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+          <Loading size="lg" message="Cargando información del visitante..." />
         </div>
       </DashboardLayout>
     );
@@ -204,7 +102,15 @@ export default function CreateVisitorAccessPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900">Crear Acceso para Visitante</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Detalles del Visitante</h1>
+          <div className="flex space-x-3">
+            <Button variant="outline" onClick={() => router.push('/access/visitors')}>
+              Volver
+            </Button>
+            <Button onClick={() => router.push(`/access/visitors/${visitorId}/access`)}>
+              Crear Acceso
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -214,40 +120,29 @@ export default function CreateVisitorAccessPage() {
           </Alert>
         )}
 
-        {qrCode ? (
-          <div className="bg-white shadow sm:rounded-lg">
-            <div className="px-4 py-5 sm:p-6 text-center">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Acceso creado exitosamente
-              </h3>
-              <div className="mt-5 max-w-md mx-auto">
-                <img src={qrCode} alt="QR Code" className="mx-auto" />
-                <p className="mt-2 text-sm text-gray-500">
-                  Escanee este código QR para permitir el acceso al visitante.
-                </p>
-              </div>
-              <div className="mt-5">
-                <Button
-                  onClick={() => router.push('/access/visitors')}
-                >
-                  Volver a Visitantes
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white shadow sm:rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              {visitor && (
-                <div className="mb-6 flex items-center">
+        {visitor ? (
+          <>
+            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+              <div className="px-4 py-5 sm:px-6 flex justify-between items-start">
+                <div className="flex items-center">
                   <div className="flex-shrink-0 h-16 w-16 rounded-full overflow-hidden bg-gray-100">
                     {visitor.photo ? (
-                      <Image 
+                      // Usar img nativo en lugar de Image para evitar problemas con la configuración de Next.js
+                      <img 
                         src={visitor.photo}
                         alt={`${visitor.first_name} ${visitor.last_name}`}
-                        width={64}
-                        height={64}
                         className="h-16 w-16 object-cover"
+                        onError={(e) => {
+                          // Ocultar la imagen si falla la carga
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          // Mostrar el icono por defecto
+                          const parent = (e.target as HTMLImageElement).parentElement;
+                          if (parent) {
+                            parent.innerHTML = `<svg class="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>`;
+                          }
+                        }}
                       />
                     ) : (
                       <svg className="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
@@ -256,114 +151,100 @@ export default function CreateVisitorAccessPage() {
                     )}
                   </div>
                   <div className="ml-4">
-                    <h2 className="text-lg font-medium text-gray-900">
+                    <h2 className="text-xl font-medium text-gray-900">
                       {visitor.first_name} {visitor.last_name}
                     </h2>
-                    <p className="text-sm text-gray-500">
-                      ID: {visitor.id_number} {visitor.company && `- ${visitor.company}`}
-                    </p>
+                    <p className="text-sm text-gray-500">ID: {visitor.id_number}</p>
                   </div>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200">
+                <dl>
+                  {visitor.company && (
+                    <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">Empresa</dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {visitor.company}
+                      </dd>
+                    </div>
+                  )}
+                  {visitor.email && (
+                    <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">Email</dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {visitor.email}
+                      </dd>
+                    </div>
+                  )}
+                  {visitor.phone && (
+                    <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                      <dt className="text-sm font-medium text-gray-500">Teléfono</dt>
+                      <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                        {visitor.phone}
+                      </dd>
+                    </div>
+                  )}
+                  <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt className="text-sm font-medium text-gray-500">Fecha de registro</dt>
+                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                      {new Date(visitor.created_at).toLocaleDateString()}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            <h2 className="text-lg font-medium text-gray-900 mt-8">Accesos del Visitante</h2>
+            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+              {visitorAccesses.length > 0 ? (
+                <ul className="divide-y divide-gray-200">
+                  {visitorAccesses.map((access) => (
+                    <li key={access.id} className="px-4 py-4 sm:px-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{access.purpose}</p>
+                          <p className="text-sm text-gray-500">
+                            Válido: {new Date(access.valid_from).toLocaleString()} - {new Date(access.valid_to).toLocaleString()}
+                          </p>
+                          {access.host_detail && (
+                            <p className="text-sm text-gray-500">
+                              Anfitrión: {access.host_detail.full_name || access.host_detail.username}
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant={access.is_used ? 'secondary' : 'success'}>
+                          {access.is_used ? 'Usado' : 'Activo'}
+                        </Badge>
+                      </div>
+                      {access.access_zones_detail && access.access_zones_detail.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500">Zonas de acceso:</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {access.access_zones_detail.map(zone => (
+                              <span 
+                                key={zone.id} 
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800"
+                              >
+                                {zone.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-4 py-6 text-center text-gray-500">
+                  Este visitante no tiene accesos registrados. Utiliza el botón "Crear Acceso" para añadir uno.
                 </div>
               )}
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                  <div className="sm:col-span-6">
-                    <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
-                      Propósito de la visita
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        name="purpose"
-                        id="purpose"
-                        required
-                        value={formData.purpose}
-                        onChange={handleChange}
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <label htmlFor="valid_from" className="block text-sm font-medium text-gray-700">
-                      Válido desde
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="datetime-local"
-                        name="valid_from"
-                        id="valid_from"
-                        required
-                        value={formData.valid_from}
-                        onChange={handleChange}
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <label htmlFor="valid_to" className="block text-sm font-medium text-gray-700">
-                      Válido hasta
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="datetime-local"
-                        name="valid_to"
-                        id="valid_to"
-                        required
-                        value={formData.valid_to}
-                        onChange={handleChange}
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-6">
-                    <label htmlFor="access_zones" className="block text-sm font-medium text-gray-700">
-                      Zonas de acceso
-                    </label>
-                    <div className="mt-1">
-                      <select
-                        id="access_zones"
-                        name="access_zones"
-                        multiple
-                        required
-                        onChange={handleZonesChange}
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md h-32"
-                      >
-                        {accessZones.map((zone) => (
-                          <option key={zone.id} value={zone.id}>
-                            {zone.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <p className="mt-2 text-sm text-gray-500">
-                      Mantenga presionada la tecla Ctrl (o Command en Mac) para seleccionar varias zonas.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => router.push('/access/visitors')}
-                    className="mr-3"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    isLoading={submitting}
-                    disabled={submitting}
-                  >
-                    {submitting ? 'Creando...' : 'Crear Acceso'}
-                  </Button>
-                </div>
-              </form>
             </div>
+          </>
+        ) : (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg p-6 text-center text-gray-500">
+            Visitante no encontrado
           </div>
         )}
       </div>

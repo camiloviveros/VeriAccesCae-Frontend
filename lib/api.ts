@@ -225,6 +225,9 @@ interface ParkingLogResponse {
   [key: string]: any;
 }
 
+// Variable para verificar si estamos en el navegador
+const isBrowser = typeof window !== 'undefined';
+
 // Cliente axios con configuración base
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -237,7 +240,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     // Asegurarse de que estamos en el cliente antes de acceder a localStorage
-    if (typeof window !== 'undefined') {
+    if (isBrowser) {
       const token = localStorage.getItem('access_token');
       if (token) {
         config.headers = config.headers || {};
@@ -253,15 +256,15 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = {
-      ...error.config,
-      _retry: error.config?._retry || false
-    };
+    // Verificar si error.config está definido
+    const originalRequest = error.config 
+      ? { ...error.config, _retry: error.config._retry || false } 
+      : { _retry: false, url: null };
     
     // Si el error es 401 y no es un reintento y no es un intento de login
     if (error.response?.status === 401 && !originalRequest._retry && 
         originalRequest.url !== `${API_URL}/auth/login/` && 
-        typeof window !== 'undefined') {
+        isBrowser) {
       originalRequest._retry = true;
       
       try {
@@ -290,20 +293,53 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('user');
         
         // Solo redirigir si estamos en el navegador
-        if (typeof window !== 'undefined') {
+        if (isBrowser) {
           window.location.href = '/auth/login';
         }
         return Promise.reject(refreshError);
       }
     }
     
-    // Proporcionar información más detallada sobre los errores
-    console.error('API Error:', {
-      status: error.response?.status,
-      url: error.config?.url,
-      method: error.config?.method,
-      data: error.response?.data
-    });
+    // Manejo mejorado de errores específicos
+    if (error.response) {
+      switch (error.response.status) {
+        case 403:
+          console.error('API Error: Forbidden (403) - No tienes permisos para acceder a este recurso', {
+            url: error.config?.url || 'unknown',
+            method: error.config?.method || 'unknown'
+          });
+          break;
+        case 404:
+          console.error('API Error: Not Found (404) - Recurso no encontrado', {
+            url: error.config?.url || 'unknown',
+            method: error.config?.method || 'unknown'
+          });
+          break;
+        case 500:
+          console.error('API Error: Server Error (500) - Error interno del servidor', {
+            url: error.config?.url || 'unknown',
+            method: error.config?.method || 'unknown'
+          });
+          break;
+        default:
+          console.error('API Error:', {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            url: error.config?.url || 'unknown',
+            method: error.config?.method || 'unknown',
+            data: error.response.data || 'No data'
+          });
+      }
+    } else if (error.request) {
+      // La solicitud se realizó pero no se recibió respuesta
+      console.error('API Error: No se recibió respuesta del servidor', {
+        url: error.config?.url || 'unknown',
+        method: error.config?.method || 'unknown'
+      });
+    } else {
+      // Error al configurar la solicitud
+      console.error('API Error:', error.message);
+    }
     
     return Promise.reject(error);
   }
@@ -404,11 +440,60 @@ export const authService = {
       console.error("Error en logout:", error);
     } finally {
       // Siempre limpiar el localStorage incluso si la API falla
-      if (typeof window !== 'undefined') {
+      if (isBrowser) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
       }
+    }
+  },
+  
+  checkSession: async (): Promise<boolean> => {
+    // Si no estamos en un navegador, no hay sesión
+    if (!isBrowser) return false;
+    
+    const token = localStorage.getItem('access_token');
+    if (!token) return false;
+    
+    try {
+      // Intentar hacer una solicitud para verificar que el token es válido
+      await apiClient.get('/auth/me/');
+      return true;
+    } catch (error) {
+      // Si hay un error, la sesión probablemente expiró
+      console.error("Session check failed:", error);
+      
+      // Verificar si el error es 401 (Unauthorized)
+      const axiosError = error as any;
+      if (axiosError.response?.status === 401) {
+        try {
+          // Intentar refrescar el token
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (!refreshToken) {
+            return false;
+          }
+          
+          const response = await axios.post<{access: string}>(`${API_URL}/auth/refresh/`, {
+            refresh: refreshToken,
+          });
+          
+          // Guardar el nuevo token
+          localStorage.setItem('access_token', response.data.access);
+          
+          // Intentar nuevamente la solicitud
+          await apiClient.get('/auth/me/');
+          return true;
+        } catch (refreshError) {
+          console.error("Token refresh failed:", refreshError);
+          // Limpiar tokens
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          return false;
+        }
+      }
+      
+      return false;
     }
   }
 };
@@ -420,6 +505,47 @@ export const accessService = {
       return response.data;
     } catch (error) {
       console.error("Error getting access points:", error);
+      throw error;
+    }
+  },
+  
+  getAccessPoint: async (id: string | number): Promise<AccessPointResponse> => {
+    try {
+      const response = await apiClient.get<AccessPointResponse>(`/access/access-points/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error getting access point ${id}:`, error);
+      throw error;
+    }
+  },
+  
+  createAccessPoint: async (data: Partial<AccessPointResponse>): Promise<AccessPointResponse> => {
+    try {
+      console.log("Enviando datos para crear punto de acceso:", data);
+      const response = await apiClient.post<AccessPointResponse>('/access/access-points/', data);
+      return response.data;
+    } catch (error) {
+      console.error("Error creating access point:", error);
+      throw error;
+    }
+  },
+  
+  updateAccessPoint: async (id: string | number, data: Partial<AccessPointResponse>): Promise<AccessPointResponse> => {
+    try {
+      console.log(`Actualizando punto de acceso ${id}:`, data);
+      const response = await apiClient.patch<AccessPointResponse>(`/access/access-points/${id}/`, data);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating access point ${id}:`, error);
+      throw error;
+    }
+  },
+  
+  deleteAccessPoint: async (id: string | number): Promise<void> => {
+    try {
+      await apiClient.delete(`/access/access-points/${id}/`);
+    } catch (error) {
+      console.error(`Error deleting access point ${id}:`, error);
       throw error;
     }
   },

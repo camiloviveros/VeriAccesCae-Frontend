@@ -5,8 +5,9 @@ import DashboardLayout from '../../../components/layout/DashboardLayout';
 import { accessService, securityService } from '../../../lib/api';
 
 // Definición de interfaces para los tipos de datos
+// Actualizado para coincidir con los tipos de la API
 interface AccessLog {
-  id: string;
+  id: number; // Cambiado de string a number para coincidir con AccessLogResponse
   user_detail?: {
     username: string;
   };
@@ -17,19 +18,20 @@ interface AccessLog {
   timestamp: string;
 }
 
-interface ApiResponse<T> {
-  results?: T[];
-  count?: number;
-}
-
 interface Visitor {
-  id: string;
+  id: number; // Cambiado de string a number
   // Otras propiedades de visitor si las hay
 }
 
 interface Incident {
-  id: string;
+  id: number; // Cambiado de string a number
   // Otras propiedades de incident si las hay
+}
+
+// Interfaz para manejar respuestas paginadas
+interface ApiResponse<T> {
+  results?: T[];
+  count?: number;
 }
 
 export default function DashboardPage() {
@@ -48,16 +50,39 @@ export default function DashboardPage() {
         setLoading(true);
         
         // Obtener los datos para el dashboard
-        const logsResponse = await accessService.getAccessLogs({ limit: 5 }) as ApiResponse<AccessLog>;
-        const visitorsResponse = await accessService.getVisitors() as ApiResponse<Visitor>;
-        const incidentsResponse = await securityService.getIncidents() as ApiResponse<Incident>;
+        // Sin usar 'as' para hacer la conversión, dejando que TypeScript infiera el tipo
+        const logsResponse = await accessService.getAccessLogs({ limit: 5 });
+        const visitorsResponse = await accessService.getVisitors();
+        const incidentsResponse = await securityService.getIncidents();
+        
+        // Extraer los logs de la respuesta
+        let logs: AccessLog[] = [];
+        if (logsResponse && 'results' in logsResponse && Array.isArray(logsResponse.results)) {
+          logs = logsResponse.results as unknown as AccessLog[];
+        }
+        
+        // Extraer el conteo de visitantes
+        let visitorCount = 0;
+        if (Array.isArray(visitorsResponse)) {
+          visitorCount = visitorsResponse.length;
+        } else if (visitorsResponse && 'results' in visitorsResponse) {
+          visitorCount = visitorsResponse.count || visitorsResponse.results?.length || 0;
+        }
+        
+        // Extraer el conteo de incidentes
+        let incidentCount = 0;
+        if (Array.isArray(incidentsResponse)) {
+          incidentCount = incidentsResponse.length;
+        } else if (incidentsResponse && 'results' in incidentsResponse) {
+          incidentCount = incidentsResponse.count || incidentsResponse.results?.length || 0;
+        }
         
         // Actualizar los datos del dashboard
-        setRecentLogs(logsResponse.results || []);
+        setRecentLogs(logs);
         setStats({
           activeUsers: 0, // Esto podría venir de una API específica
-          visitors: visitorsResponse.count || visitorsResponse.results?.length || 0,
-          incidents: incidentsResponse.count || incidentsResponse.results?.length || 0,
+          visitors: visitorCount,
+          incidents: incidentCount,
           accessLogs: logsResponse.count || 0
         });
       } catch (error) {
