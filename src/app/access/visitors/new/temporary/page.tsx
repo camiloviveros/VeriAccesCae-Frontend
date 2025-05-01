@@ -3,13 +3,14 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../../../lib/api';
+import { accessService } from '../../../../../../lib/api'; // Actualizar la ruta de importación
 import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
 import { Button } from '../../../../../../components/ui/Button';
 
 interface FormData {
   first_name: string;
   last_name: string;
+  id_number: string; // Agregamos este campo
   phone: string;
   apartment_number: string;
   entry_date: string;
@@ -21,6 +22,7 @@ export default function NewTemporaryVisitorPage() {
   const [formData, setFormData] = useState<FormData>({
     first_name: '',
     last_name: '',
+    id_number: '', // Inicializamos este campo
     phone: '',
     apartment_number: '',
     entry_date: '',
@@ -142,6 +144,24 @@ export default function NewTemporaryVisitorPage() {
                       id="last_name"
                       required
                       value={formData.last_name}
+                      onChange={handleChange}
+                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    />
+                  </div>
+                </div>
+
+                {/* Añadir campo id_number */}
+                <div className="sm:col-span-3">
+                  <label htmlFor="id_number" className="block text-sm font-medium text-gray-700">
+                    Número de Identificación
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      type="text"
+                      name="id_number"
+                      id="id_number"
+                      required
+                      value={formData.id_number}
                       onChange={handleChange}
                       className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                     />

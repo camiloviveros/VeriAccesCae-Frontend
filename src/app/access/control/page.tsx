@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../lib/api';
+import { accessService } from '../../../../lib/api'; // Mantener la misma ruta de importación
 import { Alert, AlertTitle } from '../../../../components/ui/Alert';
 import { Button } from '../../../../components/ui/Button';
 import { Loading } from '../../../../components/ui/Loading';
@@ -28,15 +28,18 @@ interface Visitor {
 
 const parseVisitorStatus = (status?: string): 'pending' | 'inside' | 'outside' | 'denied' | undefined => {
   if (status === 'pending' || status === 'inside' || status === 'outside' || status === 'denied') {
-    return status;
+    return status as 'pending' | 'inside' | 'outside' | 'denied';
   }
   return undefined;
 };
 
-const ensureVisitor = (visitor: any): Visitor => ({
-  ...visitor,
-  status: parseVisitorStatus(visitor.status) || 'pending'
-});
+const ensureVisitor = (visitor: any): Visitor => {
+  const status = parseVisitorStatus(visitor.status);
+  return {
+    ...visitor,
+    status: status || 'pending'
+  };
+};
 
 export default function AccessControlPage() {
   const router = useRouter();
@@ -53,6 +56,12 @@ export default function AccessControlPage() {
 
   useEffect(() => {
     fetchVisitors();
+    
+    // Cargar el contador de aforo desde localStorage
+    const storedCount = localStorage.getItem('occupancyCount');
+    if (storedCount) {
+      setOccupancyCount(parseInt(storedCount, 10));
+    }
   }, []);
 
   const fetchVisitors = async () => {
@@ -72,9 +81,12 @@ export default function AccessControlPage() {
       }
       
       setVisitors(visitorsList);
-      const insideVisitors = visitorsList.filter(visitor => visitor.status === 'inside');
+      const insideVisitors = visitorsList.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
-      setOccupancyCount(insideVisitors.length);
+      
+      // Actualizar el count de ocupación con el mayor valor entre los visitantes dentro y el almacenado
+      const visitorCount = insideVisitors.length;
+      setOccupancyCount(prev => Math.max(prev, visitorCount));
     } catch (err) {
       console.error('Error fetching visitors:', err);
       setError('No se pudieron cargar los visitantes');
@@ -90,14 +102,21 @@ export default function AccessControlPage() {
         return;
       }
       
+      // Actualizar el visitante en el backend
+      await accessService.updateVisitorStatus(visitor.id, 'inside');
+      
+      // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
       const updatedVisitors = visitors.map(v => 
-        v.id === visitor.id ? {...v, status: 'inside'} : v
+        v.id === visitor.id ? {...v, status: 'inside' as const} : v
       );
       setVisitors(updatedVisitors);
       
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       setOccupancyCount(insideVisitors.length);
+      
+      // Guardar el contador en localStorage
+      localStorage.setItem('occupancyCount', insideVisitors.length.toString());
       
       setSuccessMessage(`Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -109,8 +128,12 @@ export default function AccessControlPage() {
 
   const handleDenyAccess = async (visitor: Visitor) => {
     try {
+      // Actualizar el visitante en el backend
+      await accessService.updateVisitorStatus(visitor.id, 'denied');
+      
+      // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
       const updatedVisitors = visitors.map(v => 
-        v.id === visitor.id ? {...v, status: 'denied'} : v
+        v.id === visitor.id ? {...v, status: 'denied' as const} : v
       );
       setVisitors(updatedVisitors);
       
@@ -124,14 +147,21 @@ export default function AccessControlPage() {
 
   const handleExitBuilding = async (visitor: Visitor) => {
     try {
+      // Actualizar el visitante en el backend
+      await accessService.updateVisitorStatus(visitor.id, 'outside');
+      
+      // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
       const updatedVisitors = visitors.map(v => 
-        v.id === visitor.id ? {...v, status: 'outside'} : v
+        v.id === visitor.id ? {...v, status: 'outside' as const} : v
       );
       setVisitors(updatedVisitors);
       
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       setOccupancyCount(insideVisitors.length);
+      
+      // Guardar el contador en localStorage
+      localStorage.setItem('occupancyCount', insideVisitors.length.toString());
       
       setSuccessMessage(`Salida registrada para ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -151,6 +181,11 @@ export default function AccessControlPage() {
     
     try {
       setIsDeletingVisitor(true);
+      
+      // Eliminar visitante del backend
+      await accessService.deleteVisitor(selectedVisitor.id);
+      
+      // Actualizar en el estado local
       const updatedVisitors = visitors.filter(v => v.id !== selectedVisitor.id);
       setVisitors(updatedVisitors);
       
@@ -158,6 +193,9 @@ export default function AccessControlPage() {
         const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
         setPeopleInside(insideVisitors);
         setOccupancyCount(insideVisitors.length);
+        
+        // Guardar el contador en localStorage
+        localStorage.setItem('occupancyCount', insideVisitors.length.toString());
       }
       
       setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado`);
@@ -174,7 +212,11 @@ export default function AccessControlPage() {
 
   const handleAddPersonToOccupancy = () => {
     if (occupancyCount < maxOccupancy) {
-      setOccupancyCount(prev => prev + 1);
+      const newCount = occupancyCount + 1;
+      setOccupancyCount(newCount);
+      
+      // Guardar el contador en localStorage
+      localStorage.setItem('occupancyCount', newCount.toString());
     } else {
       setError(`No se puede agregar más personas. El edificio ha alcanzado su capacidad máxima (${maxOccupancy} personas).`);
     }
@@ -182,7 +224,11 @@ export default function AccessControlPage() {
 
   const handleRemovePersonFromOccupancy = () => {
     if (occupancyCount > 0) {
-      setOccupancyCount(prev => prev - 1);
+      const newCount = occupancyCount - 1;
+      setOccupancyCount(newCount);
+      
+      // Guardar el contador en localStorage
+      localStorage.setItem('occupancyCount', newCount.toString());
     }
   };
 
@@ -369,13 +415,6 @@ export default function AccessControlPage() {
                       >
                         🗑️ Eliminar
                       </Button>
-                      
-                      <Link 
-                        href={`/access/visitors/${visitor.id}`}
-                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      >
-                        Ver Detalle
-                      </Link>
                     </div>
                   </div>
                 </li>
@@ -383,7 +422,7 @@ export default function AccessControlPage() {
             </ul>
           ) : (
             <div className="px-4 py-6 text-center text-gray-500">
-              No hay visitantes registrados.
+              No hay visitantes registrados. Por favor, registre visitantes en la sección de Visitantes.
             </div>
           )}
         </div>
