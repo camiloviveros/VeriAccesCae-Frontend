@@ -48,6 +48,35 @@ export default function DashboardPage() {
     peopleInside: 0,
     recentAccessLogs: [] as AccessLog[]
   });
+  const [occupancyCount, setOccupancyCount] = useState(0);
+
+  // Función para escuchar cambios en el localStorage de occupancyCount
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedCount = localStorage.getItem('occupancyCount');
+      if (storedCount) {
+        setOccupancyCount(parseInt(storedCount, 10));
+        setStats(prev => ({
+          ...prev,
+          peopleInside: parseInt(storedCount, 10)
+        }));
+      }
+    };
+
+    // Agregar evento de escucha para cambios en localStorage
+    window.addEventListener('storage', handleStorageChange);
+
+    // Verificar valor inicial
+    const storedCount = localStorage.getItem('occupancyCount');
+    if (storedCount) {
+      setOccupancyCount(parseInt(storedCount, 10));
+    }
+
+    // Limpiar listener al desmontar
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -60,9 +89,19 @@ export default function DashboardPage() {
         // Procesar visitantes
         let visitors: Visitor[] = [];
         if (Array.isArray(visitorsResponse)) {
-          visitors = visitorsResponse;
+          visitors = visitorsResponse.map(v => ({
+            ...v,
+            status: (v.status === 'pending' || v.status === 'inside' || 
+                    v.status === 'outside' || v.status === 'denied') 
+                    ? v.status : undefined
+          }));
         } else if (visitorsResponse && visitorsResponse.results && Array.isArray(visitorsResponse.results)) {
-          visitors = visitorsResponse.results;
+          visitors = visitorsResponse.results.map(v => ({
+            ...v,
+            status: (v.status === 'pending' || v.status === 'inside' || 
+                    v.status === 'outside' || v.status === 'denied') 
+                    ? v.status : undefined
+          }));
         } else if (visitorsResponse && typeof visitorsResponse === 'object') {
           const possibleVisitors = Object.values(visitorsResponse).filter(val => 
             typeof val === 'object' && val !== null && 'id' in val
@@ -102,6 +141,8 @@ export default function DashboardPage() {
           const storedCount = localStorage.getItem('occupancyCount');
           if (storedCount) {
             storedOccupancy = parseInt(storedCount, 10);
+            // Actualizar también el estado de occupancyCount
+            setOccupancyCount(storedOccupancy);
           }
         } catch (err) {
           console.error('Error reading occupancy from localStorage:', err);
@@ -124,7 +165,21 @@ export default function DashboardPage() {
     };
     
     fetchDashboardData();
+
+    // Configurar un intervalo para actualizar los datos cada 10 segundos
+    const intervalId = setInterval(fetchDashboardData, 10000);
+    
+    // Limpiar el intervalo al desmontar el componente
+    return () => clearInterval(intervalId);
   }, []);
+
+  // Actualizar peopleInside cuando cambie occupancyCount
+  useEffect(() => {
+    setStats(prev => ({
+      ...prev,
+      peopleInside: occupancyCount
+    }));
+  }, [occupancyCount]);
 
   return (
     <DashboardLayout>

@@ -230,7 +230,6 @@ export const createVisitor = async (data: FormData | Record<string, any>): Promi
   }
 };
 
-// Añadir método para actualizar el estado de un visitante
 export const updateVisitorStatus = async (id: string | number, status: string): Promise<VisitorResponse> => {
   try {
     const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
@@ -241,7 +240,6 @@ export const updateVisitorStatus = async (id: string | number, status: string): 
   }
 };
 
-// Añadir método para eliminar un visitante
 export const deleteVisitor = async (id: string | number): Promise<void> => {
   try {
     await apiClient.delete(`/access/visitors/${id}/`);
@@ -251,7 +249,6 @@ export const deleteVisitor = async (id: string | number): Promise<void> => {
   }
 };
 
-// Añadir método para obtener estadísticas
 export const getOccupancyStats = async (): Promise<{current: number, max: number}> => {
   try {
     // Esto podría ser un endpoint específico en tu backend
