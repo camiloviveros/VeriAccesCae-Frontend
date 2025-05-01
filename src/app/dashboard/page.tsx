@@ -2,262 +2,254 @@
 
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
-import { accessService, securityService } from '../../../lib/api';
+import { accessService } from '../../../lib/api';
+import StatCard from '../../../components/dashboard/StatCard';
+import { Loading } from '../../../components/ui/Loading';
+import { Alert } from '../../../components/ui/Alert';
 
-// Definición de interfaces para los tipos de datos
-// Actualizado para coincidir con los tipos de la API
+// Tipos de visitantes
+import { 
+  UserCircleIcon, 
+  BuildingOffice2Icon, 
+  ClockIcon, 
+  UserGroupIcon 
+} from '@heroicons/react/24/outline';
+
+interface Visitor {
+  id: number;
+  visitor_type?: string;
+  company?: string;
+  entry_date?: string;
+  exit_date?: string;
+  status?: 'pending' | 'inside' | 'outside' | 'denied';
+}
+
 interface AccessLog {
-  id: number; // Cambiado de string a number para coincidir con AccessLogResponse
+  id: number;
   user_detail?: {
     username: string;
   };
-  status: 'granted' | 'denied' | string;
+  status: 'granted' | 'denied';
   access_point_detail?: {
     name: string;
   };
   timestamp: string;
-}
-
-interface Visitor {
-  id: number; // Cambiado de string a number
-  // Otras propiedades de visitor si las hay
-}
-
-interface Incident {
-  id: number; // Cambiado de string a number
-  // Otras propiedades de incident si las hay
-}
-
-// Interfaz para manejar respuestas paginadas
-interface ApiResponse<T> {
-  results?: T[];
-  count?: number;
+  direction: 'in' | 'out';
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    activeUsers: 0,
-    visitors: 0,
-    incidents: 0,
-    accessLogs: 0
-  });
-  const [recentLogs, setRecentLogs] = useState<AccessLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [stats, setStats] = useState({
+    totalVisitors: 0,
+    businessVisitors: 0,
+    regularVisitors: 0,
+    temporaryVisitors: 0,
+    peopleInside: 0,
+    recentAccessLogs: [] as AccessLog[]
+  });
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         
-        // Obtener los datos para el dashboard
-        // Sin usar 'as' para hacer la conversión, dejando que TypeScript infiera el tipo
-        const logsResponse = await accessService.getAccessLogs({ limit: 5 });
+        // Obtener visitantes
         const visitorsResponse = await accessService.getVisitors();
-        const incidentsResponse = await securityService.getIncidents();
         
-        // Extraer los logs de la respuesta
-        let logs: AccessLog[] = [];
-        if (logsResponse && 'results' in logsResponse && Array.isArray(logsResponse.results)) {
-          logs = logsResponse.results as unknown as AccessLog[];
-        }
-        
-        // Extraer el conteo de visitantes
-        let visitorCount = 0;
+        // Procesar visitantes
+        let visitors: Visitor[] = [];
         if (Array.isArray(visitorsResponse)) {
-          visitorCount = visitorsResponse.length;
-        } else if (visitorsResponse && 'results' in visitorsResponse) {
-          visitorCount = visitorsResponse.count || visitorsResponse.results?.length || 0;
+          visitors = visitorsResponse;
+        } else if (visitorsResponse && visitorsResponse.results && Array.isArray(visitorsResponse.results)) {
+          visitors = visitorsResponse.results;
+        } else if (visitorsResponse && typeof visitorsResponse === 'object') {
+          const possibleVisitors = Object.values(visitorsResponse).filter(val => 
+            typeof val === 'object' && val !== null && 'id' in val
+          );
+          visitors = possibleVisitors as Visitor[];
         }
         
-        // Extraer el conteo de incidentes
-        let incidentCount = 0;
-        if (Array.isArray(incidentsResponse)) {
-          incidentCount = incidentsResponse.length;
-        } else if (incidentsResponse && 'results' in incidentsResponse) {
-          incidentCount = incidentsResponse.count || incidentsResponse.results?.length || 0;
+        // Obtener registros de acceso recientes
+        const logsResponse = await accessService.getAccessLogs({ limit: 5 });
+        let accessLogs: AccessLog[] = [];
+        if (Array.isArray(logsResponse)) {
+          accessLogs = logsResponse;
+        } else if (logsResponse && logsResponse.results && Array.isArray(logsResponse.results)) {
+          accessLogs = logsResponse.results;
         }
         
-        // Actualizar los datos del dashboard
-        setRecentLogs(logs);
+        // Calcular estadísticas
+        const businessVisitors = visitors.filter(v => 
+          v.visitor_type === 'business' || Boolean(v.company)
+        ).length;
+        
+        const temporaryVisitors = visitors.filter(v => 
+          v.visitor_type === 'temporary' || (Boolean(v.entry_date) && Boolean(v.exit_date))
+        ).length;
+        
+        const regularVisitors = visitors.filter(v => 
+          v.visitor_type === 'regular' || 
+          (!v.visitor_type && !v.company && !v.entry_date && !v.exit_date)
+        ).length;
+        
+        // Personas dentro del edificio (visitantes con acceso permitido)
+        const peopleInside = visitors.filter(v => v.status === 'inside').length;
+        
+        // Obtener el contador de aforo actual de localStorage si existe
+        let storedOccupancy = 0;
+        try {
+          const storedCount = localStorage.getItem('occupancyCount');
+          if (storedCount) {
+            storedOccupancy = parseInt(storedCount, 10);
+          }
+        } catch (err) {
+          console.error('Error reading occupancy from localStorage:', err);
+        }
+        
         setStats({
-          activeUsers: 0, // Esto podría venir de una API específica
-          visitors: visitorCount,
-          incidents: incidentCount,
-          accessLogs: logsResponse.count || 0
+          totalVisitors: visitors.length,
+          businessVisitors,
+          regularVisitors,
+          temporaryVisitors,
+          peopleInside: Math.max(peopleInside, storedOccupancy), // Usar el mayor de los dos valores
+          recentAccessLogs: accessLogs
         });
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError('Error al cargar los datos del dashboard');
       } finally {
         setLoading(false);
       }
     };
-  
+    
     fetchDashboardData();
   }, []);
-  
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
         
-        {/* Estadísticas principales */}
+        {error && <Alert variant="error">{error}</Alert>}
+        
         {loading ? (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white overflow-hidden shadow rounded-lg h-24 animate-pulse">
-                <div className="h-full bg-gray-200"></div>
-              </div>
-            ))}
+          <div className="flex justify-center items-center h-64">
+            <Loading size="lg" message="Cargando datos del dashboard..." />
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <>
+            {/* Estadísticas principales */}
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Total de visitantes */}
+              <StatCard 
+                title="Total de Visitantes" 
+                value={stats.totalVisitors} 
+                icon={<UserGroupIcon className="h-6 w-6 text-primary-600" />}
+              />
+              
+              {/* Visitantes empresariales */}
+              <StatCard 
+                title="Visitantes Empresa" 
+                value={stats.businessVisitors} 
+                icon={<BuildingOffice2Icon className="h-6 w-6 text-green-600" />}
+              />
+              
+              {/* Visitantes normales */}
+              <StatCard 
+                title="Visitantes Normales" 
+                value={stats.regularVisitors} 
+                icon={<UserCircleIcon className="h-6 w-6 text-blue-600" />}
+              />
+              
+              {/* Visitantes temporales */}
+              <StatCard 
+                title="Visitantes Temporales" 
+                value={stats.temporaryVisitors} 
+                icon={<ClockIcon className="h-6 w-6 text-yellow-600" />}
+              />
+            </div>
+            
+            {/* Aforo del edificio */}
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="px-4 py-5 sm:p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-primary-100 rounded-md p-3">
-                    <svg className="h-6 w-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  Aforo del Edificio
+                </h3>
+                <div className="mt-2 flex justify-between items-center">
+                  <div>
+                    <p className="text-3xl font-semibold text-gray-900">{stats.peopleInside}</p>
+                    <p className="text-sm text-gray-500">Personas actualmente dentro</p>
                   </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Usuarios Activos
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {stats.activeUsers}
-                      </div>
-                    </dd>
+                  <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center">
+                    <UserGroupIcon className="h-8 w-8 text-green-600" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="relative pt-1">
+                    <div className="overflow-hidden h-3 text-xs flex rounded bg-gray-200">
+                      <div
+                        style={{ width: `${Math.min((stats.peopleInside / 100) * 100, 100)}%` }}
+                        className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
+                          stats.peopleInside < 50 ? 'bg-green-500' : 
+                          stats.peopleInside < 80 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                      ></div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
             
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
-                    <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                    </svg>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Visitantes
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {stats.visitors}
-                      </div>
-                    </dd>
-                  </div>
-                </div>
+            {/* Registros de acceso recientes */}
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+              <div className="px-4 py-5 sm:px-6">
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  Registros de acceso recientes
+                </h3>
               </div>
-            </div>
-            
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-yellow-100 rounded-md p-3">
-                    <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Incidentes
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {stats.incidents}
+              <ul className="divide-y divide-gray-200">
+                {stats.recentAccessLogs.length > 0 ? (
+                  stats.recentAccessLogs.map((log) => (
+                    <li key={log.id} className="px-4 py-4 sm:px-6">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-primary-600">
+                          {log.user_detail?.username || 'Visitante'}
+                        </p>
+                        <div className="ml-2 flex-shrink-0 flex">
+                          <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            log.status === 'granted' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {log.status === 'granted' ? 'Acceso concedido' : 'Acceso denegado'}
+                          </p>
+                        </div>
                       </div>
-                    </dd>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-indigo-100 rounded-md p-3">
-                    <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Registros de Acceso
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {stats.accessLogs}
+                      <div className="mt-2 sm:flex sm:justify-between">
+                        <div className="sm:flex">
+                          <p className="flex items-center text-sm text-gray-500">
+                            {log.access_point_detail?.name || 'Punto de acceso'}
+                          </p>
+                        </div>
+                        <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
+                          <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <p>
+                            {new Date(log.timestamp).toLocaleString()} - {log.direction === 'in' ? 'Entrada' : 'Salida'}
+                          </p>
+                        </div>
                       </div>
-                    </dd>
-                  </div>
-                </div>
-              </div>
+                    </li>
+                  ))
+                ) : (
+                  <li className="px-4 py-6 text-center text-gray-500">
+                    No hay registros de acceso recientes.
+                  </li>
+                )}
+              </ul>
             </div>
-          </div>
+          </>
         )}
-        
-        {/* Registros recientes */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <div className="px-4 py-5 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Registros de acceso recientes
-            </h3>
-          </div>
-          <ul className="divide-y divide-gray-200">
-            {loading ? (
-              [...Array(5)].map((_, i) => (
-                <li key={i} className="px-4 py-4 sm:px-6 animate-pulse">
-                  <div className="flex items-center justify-between">
-                    <div className="bg-gray-200 h-4 w-1/3 rounded"></div>
-                    <div className="bg-gray-200 h-4 w-1/4 rounded"></div>
-                  </div>
-                  <div className="mt-2 bg-gray-200 h-4 w-1/2 rounded"></div>
-                </li>
-              ))
-            ) : recentLogs.length > 0 ? (
-              recentLogs.map((log) => (
-                <li key={log.id} className="px-4 py-4 sm:px-6">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-indigo-600 truncate">
-                      {log.user_detail?.username || 'Usuario desconocido'}
-                    </p>
-                    <div className="ml-2 flex-shrink-0 flex">
-                      <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        log.status === 'granted' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {log.status === 'granted' ? 'Acceso concedido' : 'Acceso denegado'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-2 sm:flex sm:justify-between">
-                    <div className="sm:flex">
-                      <p className="flex items-center text-sm text-gray-500">
-                        {log.access_point_detail?.name || 'Punto de acceso desconocido'}
-                      </p>
-                    </div>
-                    <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                      <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p>
-                        {new Date(log.timestamp).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </li>
-              ))
-            ) : (
-              <li className="px-4 py-4 sm:px-6 text-center text-gray-500">
-                No hay registros de acceso recientes.
-              </li>
-            )}
-          </ul>
-        </div>
       </div>
     </DashboardLayout>
   );

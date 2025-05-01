@@ -85,6 +85,11 @@ interface VisitorResponse {
   email?: string;
   company?: string;
   photo?: string;
+  visitor_type?: string;
+  apartment_number?: string;
+  entry_date?: string;
+  exit_date?: string;
+  status?: string;
   created_at: string;
   [key: string]: any;
 }
@@ -582,15 +587,76 @@ export const accessService = {
   
   createVisitor: async (data: FormData | Record<string, any>): Promise<VisitorResponse> => {
     try {
-      let headers = {};
+      // Si los datos ya son FormData, usarlos directamente
       if (data instanceof FormData) {
-        headers = { 'Content-Type': 'multipart/form-data' };
+        const response = await apiClient.post<VisitorResponse>('/access/visitors/', data, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
       }
       
-      const response = await apiClient.post<VisitorResponse>('/access/visitors/', data, { headers });
+      // Si no, crear FormData
+      const formData = new FormData();
+      
+      // Añadir cada campo al FormData
+      Object.entries(data).forEach(([key, value]) => {
+        // Si es un arreglo
+        if (Array.isArray(value)) {
+          value.forEach(item => {
+            formData.append(`${key}`, item.toString());
+          });
+        } 
+        // Si es un archivo (como photo)
+        else if (value instanceof File) {
+          formData.append(key, value);
+        } 
+        // Para otros tipos de datos
+        else if (value !== null && value !== undefined) {
+          formData.append(key, value.toString());
+        }
+      });
+      
+      // Enviar FormData
+      const response = await apiClient.post<VisitorResponse>('/access/visitors/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
       return response.data;
     } catch (error) {
       console.error("Error creating visitor:", error);
+      throw error;
+    }
+  },
+  
+  // Añadir método para actualizar el estado de un visitante
+  updateVisitorStatus: async (id: string | number, status: string): Promise<VisitorResponse> => {
+    try {
+      const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating visitor status (${id}):`, error);
+      throw error;
+    }
+  },
+
+  // Añadir método para eliminar un visitante
+  deleteVisitor: async (id: string | number): Promise<void> => {
+    try {
+      await apiClient.delete(`/access/visitors/${id}/`);
+    } catch (error) {
+      console.error(`Error deleting visitor (${id}):`, error);
+      throw error;
+    }
+  },
+  
+  // Añadir método para obtener estadísticas
+  getOccupancyStats: async (): Promise<{current: number, max: number}> => {
+    try {
+      // Esto podría ser un endpoint específico en tu backend
+      const response = await apiClient.get<{current: number, max: number}>('/access/stats/occupancy/');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting occupancy stats:', error);
       throw error;
     }
   },

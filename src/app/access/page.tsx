@@ -6,6 +6,7 @@ import { accessService } from '../../../lib/api';
 import Link from 'next/link';
 import { Alert, AlertTitle } from '../../../components/ui/Alert';
 import { Loading } from '../../../components/ui/Loading';
+import { Button } from '../../../components/ui/Button';
 
 interface Visitor {
   id: number;
@@ -16,6 +17,10 @@ interface Visitor {
   company?: string;
   email?: string;
   phone?: string;
+  visitor_type?: string;
+  apartment_number?: string;
+  entry_date?: string;
+  exit_date?: string;
 }
 
 interface ApiResponse {
@@ -65,12 +70,45 @@ export default function VisitorsPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-semibold text-gray-900">Visitantes</h1>
-          <Link 
-            href="/access/visitors/new" 
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            Registrar Nuevo Visitante
-          </Link>
+        </div>
+
+        {/* Sección de botones para los tipos de visitantes */}
+        <div className="bg-white p-6 shadow rounded-lg">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Registrar nuevo visitante</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link href="/access/visitors/new/business">
+              <Button className="w-full py-6" variant="default">
+                <div className="flex flex-col items-center">
+                  <svg className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span>Visitante Empresa</span>
+                </div>
+              </Button>
+            </Link>
+            
+            <Link href="/access/visitors/new/regular">
+              <Button className="w-full py-6" variant="outline">
+                <div className="flex flex-col items-center">
+                  <svg className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>Visitante Normal</span>
+                </div>
+              </Button>
+            </Link>
+            
+            <Link href="/access/visitors/new/temporary">
+              <Button className="w-full py-6" variant="secondary">
+                <div className="flex flex-col items-center">
+                  <svg className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Visitante Temporal</span>
+                </div>
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {error && (
@@ -93,15 +131,12 @@ export default function VisitorsPage() {
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-gray-100">
                         {visitor.photo ? (
-                          // Usar img nativo en lugar de Image para evitar problemas con la configuración de Next.js
                           <img 
                             src={visitor.photo}
                             alt={`${visitor.first_name} ${visitor.last_name}`}
                             className="h-12 w-12 object-cover"
                             onError={(e) => {
-                              // Ocultar la imagen si falla la carga
                               (e.target as HTMLImageElement).style.display = 'none';
-                              // Mostrar el icono por defecto
                               const parent = (e.target as HTMLImageElement).parentElement;
                               if (parent) {
                                 parent.innerHTML = `<svg class="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
@@ -121,26 +156,30 @@ export default function VisitorsPage() {
                           <p className="text-sm font-medium text-indigo-600 truncate">
                             {visitor.first_name} {visitor.last_name}
                           </p>
-                          <div className="ml-2 flex-shrink-0 flex">
+                          <div className="ml-2 flex-shrink-0 flex space-x-2">
+                            <span className="px-2 py-1 inline-flex text-xs font-medium rounded-md bg-blue-100 text-blue-800">
+                              {visitor.visitor_type || (visitor.company ? 'Empresa' : 'Normal')}
+                            </span>
                             <Link
                               href={`/access/visitors/${visitor.id}`}
                               className="px-3 py-1 text-xs font-medium rounded bg-gray-50 text-gray-700 hover:bg-gray-100"
                             >
                               Ver Detalles
                             </Link>
-                            <Link
-                              href={`/access/visitors/${visitor.id}/access`}
-                              className="ml-2 px-3 py-1 text-xs font-medium rounded bg-primary-50 text-primary-700 hover:bg-primary-100"
-                            >
-                              Crear Acceso
-                            </Link>
                           </div>
                         </div>
                         <div className="mt-2 flex justify-between">
                           <div>
-                            <p className="text-sm text-gray-500">
-                              ID: {visitor.id_number}
-                            </p>
+                            {visitor.id_number && (
+                              <p className="text-sm text-gray-500">
+                                ID: {visitor.id_number}
+                              </p>
+                            )}
+                            {visitor.apartment_number && (
+                              <p className="text-sm text-gray-500">
+                                Apartamento: {visitor.apartment_number}
+                              </p>
+                            )}
                             {visitor.company && (
                               <p className="text-sm text-gray-500">
                                 Empresa: {visitor.company}
@@ -148,11 +187,14 @@ export default function VisitorsPage() {
                             )}
                           </div>
                           <div className="text-sm text-gray-500">
+                            {visitor.phone && (
+                              <p>{visitor.phone}</p>
+                            )}
                             {visitor.email && (
                               <p>{visitor.email}</p>
                             )}
-                            {visitor.phone && (
-                              <p>{visitor.phone}</p>
+                            {visitor.entry_date && visitor.exit_date && (
+                              <p>Visita: {new Date(visitor.entry_date).toLocaleString()} - {new Date(visitor.exit_date).toLocaleString()}</p>
                             )}
                           </div>
                         </div>
@@ -164,7 +206,7 @@ export default function VisitorsPage() {
             </ul>
           ) : (
             <div className="p-6 text-center text-gray-500">
-              No hay visitantes registrados. Utiliza el botón "Registrar Nuevo Visitante" para añadir uno.
+              No hay visitantes registrados. Utiliza los botones para registrar uno nuevo.
             </div>
           )}
         </div>
