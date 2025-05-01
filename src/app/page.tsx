@@ -16,18 +16,18 @@ export default function HomePage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       {/* Barra de navegación */}
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-gray-900">VeriAccessSCAE</h1>
+                <h1 className="text-xl font-bold text-black">VeriAccessSCAE</h1>
               </div>
             </div>
             <div className="flex items-center">
-              <Link href="/auth/login" className="text-sm font-medium text-primary-600 hover:text-primary-500">
+              <Link href="/auth/login" className="text-sm font-medium text-black hover:text-primary-500">
                 Iniciar sesión
               </Link>
               <Link href="/auth/register" className="ml-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
@@ -80,10 +80,10 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="lg:text-center">
             <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">Características</h2>
-            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 sm:text-4xl">
+            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-black sm:text-4xl">
               Control de acceso inteligente
             </p>
-            <p className="mt-4 max-w-2xl text-xl text-gray-500 lg:mx-auto">
+            <p className="mt-4 max-w-2xl text-xl text-black lg:mx-auto">
               Un sistema completo para gestionar y monitorear el acceso a sus instalaciones.
             </p>
           </div>
@@ -97,9 +97,9 @@ export default function HomePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                   </div>
-                  <p className="ml-16 text-lg leading-6 font-medium text-gray-900">Control de acceso seguro</p>
+                  <p className="ml-16 text-lg leading-6 font-medium text-black">Control de acceso seguro</p>
                 </dt>
-                <dd className="mt-2 ml-16 text-base text-gray-500">
+                <dd className="mt-2 ml-16 text-base text-black">
                   Gestione el acceso a sus instalaciones con tecnología avanzada y segura.
                 </dd>
               </div>
@@ -111,9 +111,9 @@ export default function HomePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                     </svg>
                   </div>
-                  <p className="ml-16 text-lg leading-6 font-medium text-gray-900">Reportes detallados</p>
+                  <p className="ml-16 text-lg leading-6 font-medium text-black">Reportes detallados</p>
                 </dt>
-                <dd className="mt-2 ml-16 text-base text-gray-500">
+                <dd className="mt-2 ml-16 text-base text-black">
                   Obtenga informes detallados sobre los accesos y eventos de seguridad.
                 </dd>
               </div>
@@ -126,9 +126,9 @@ export default function HomePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   </div>
-                  <p className="ml-16 text-lg leading-6 font-medium text-gray-900">Monitoreo en tiempo real</p>
+                  <p className="ml-16 text-lg leading-6 font-medium text-black">Monitoreo en tiempo real</p>
                 </dt>
-                <dd className="mt-2 ml-16 text-base text-gray-500">
+                <dd className="mt-2 ml-16 text-base text-black">
                   Visualice todos los eventos de acceso en tiempo real desde cualquier dispositivo.
                 </dd>
               </div>
@@ -140,9 +140,9 @@ export default function HomePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
-                  <p className="ml-16 text-lg leading-6 font-medium text-gray-900">Respuesta rápida</p>
+                  <p className="ml-16 text-lg leading-6 font-medium text-black">Respuesta rápida</p>
                 </dt>
-                <dd className="mt-2 ml-16 text-base text-gray-500">
+                <dd className="mt-2 ml-16 text-base text-black">
                   Actúe rápidamente ante cualquier incidente de seguridad o acceso no autorizado.
                 </dd>
               </div>

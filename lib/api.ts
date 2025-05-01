@@ -32,13 +32,17 @@ apiClient.interceptors.response.use(
       _retry: error.config?._retry || false
     };
     
-    // Si el error es 401 y no es un reintento
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Si el error es 401 y no es un reintento y no es un intento de login
+    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== `${API_URL}/auth/login/`) {
       originalRequest._retry = true;
       
       try {
         // Intentar refrescar el token
         const refreshToken = localStorage.getItem('refresh_token');
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+        
         const response = await axios.post<{access: string}>(`${API_URL}/auth/refresh/`, {
           refresh: refreshToken,
         });
@@ -51,10 +55,16 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // Si falla el refresh, redirigir al login
+        console.error('Error refreshing token:', refreshError);
+        // Si falla el refresh, limpiar el almacenamiento
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/auth/login';
+        localStorage.removeItem('user');
+        
+        // Solo redirigir si estamos en el navegador
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/login';
+        }
         return Promise.reject(refreshError);
       }
     }
@@ -92,12 +102,26 @@ interface ReportParams {
 // Servicios API para cada entidad
 export const authService = {
   login: async (username: string, password: string) => {
-    const response = await apiClient.post<{token: string}>('/auth/login/', { username, password });
-    return response.data;
+    try {
+      console.log("Intentando iniciar sesión:", { username });
+      const response = await apiClient.post('/auth/login/', { username, password });
+      console.log("Respuesta de login:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Error en login:", error);
+      throw error;
+    }
   },
   register: async (userData: UserData) => {
-    const response = await apiClient.post('/auth/register/', userData);
-    return response.data;
+    try {
+      console.log("Enviando datos de registro:", userData);
+      const response = await apiClient.post('/auth/register/', userData);
+      console.log("Respuesta de registro:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Error en registro:", error);
+      throw error;
+    }
   },
   getCurrentUser: async () => {
     const response = await apiClient.get('/auth/me/');
@@ -107,6 +131,22 @@ export const authService = {
     const response = await apiClient.post('/auth/change-password/', data);
     return response.data;
   },
+  updateProfile: async (data: any) => {
+    const response = await apiClient.patch('/auth/me/', data);
+    return response.data;
+  },
+  logout: async () => {
+    try {
+      await apiClient.post('/auth/logout/');
+    } catch (error) {
+      console.error("Error en logout:", error);
+    } finally {
+      // Siempre limpiar el localStorage incluso si la API falla
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+    }
+  }
 };
 
 export const accessService = {
@@ -126,6 +166,10 @@ export const accessService = {
     const response = await apiClient.get('/access/visitors/');
     return response.data;
   },
+  createVisitor: async (data: VisitorAccessData) => {
+    const response = await apiClient.post('/access/visitors/', data);
+    return response.data;
+  },
   createVisitorAccess: async (data: VisitorAccessData) => {
     const response = await apiClient.post('/access/visitor-access/', data);
     return response.data;
@@ -134,6 +178,10 @@ export const accessService = {
     const response = await apiClient.get(`/access/visitor-access/${id}/qr_image/`);
     return response.data;
   },
+  remoteControl: async (id: string | number, action: 'lock' | 'unlock') => {
+    const response = await apiClient.post(`/access/access-points/${id}/remote_control/`, { action });
+    return response.data;
+  }
 };
 
 export const securityService = {

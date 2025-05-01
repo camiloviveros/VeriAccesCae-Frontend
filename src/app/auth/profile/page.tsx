@@ -1,12 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import { authService } from '@/lib/api';
-import { getCurrentUser } from '@/lib/auth';
+import DashboardLayout from '../../../../components/layout/DashboardLayout';
+import { authService } from '../../../../lib/api';
+import { getCurrentUser } from '../../../../lib/auth';
+
+interface User {
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  role?: {
+    name?: string;
+  };
+}
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -22,7 +33,7 @@ export default function ProfilePage() {
     const fetchUserProfile = async () => {
       try {
         setLoading(true);
-        const userData = await authService.getCurrentUser();
+        const userData = (await authService.getCurrentUser()) as User;
         setUser(userData);
         // Inicializar el formulario con datos del usuario
         setFormData({
@@ -69,7 +80,7 @@ export default function ProfilePage() {
     setSuccess('');
     
     try {
-      const updatedUser = await authService.updateProfile(formData);
+      const updatedUser = (await authService.updateProfile(formData)) as User;
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setSuccess('Perfil actualizado correctamente');

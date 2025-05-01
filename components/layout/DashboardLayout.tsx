@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Verificar la sesión actual
     const verifySession = async () => {
       try {
-        const userData = await authService.getCurrentUser();
+        const userData = await authService.getCurrentUser() as User;
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
       } catch (error) {

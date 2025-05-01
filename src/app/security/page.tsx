@@ -1,13 +1,48 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '@/components/layout/DashboardLayout';
-import LiveMonitoring from '@/components/access/LiveMonitoring';
-import { securityService } from '@/lib/api';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import LiveMonitoring from '../../../componentes/access/LiveMonitoring';
+import { securityService } from '../../../lib/api';
 import Link from 'next/link';
 
+// Definición de tipos para los incidentes
+interface Incident {
+  id: string;
+  title: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | string;
+  status: 'new' | 'in_progress' | 'resolved' | 'closed' | string;
+  location: string;
+  created_at: string;
+}
+
+interface ApiResponse {
+  results?: Incident[];
+}
+
+// Función de guardia de tipo para verificar si es un Incident[]
+function isIncidentArray(data: unknown): data is Incident[] {
+  return Array.isArray(data) && data.every(item => 
+    typeof item === 'object' && 
+    item !== null &&
+    'id' in item &&
+    'title' in item &&
+    'severity' in item &&
+    'status' in item &&
+    'location' in item &&
+    'created_at' in item
+  );
+}
+
+// Función de guardia de tipo para verificar si es un ApiResponse
+function isApiResponse(data: unknown): data is ApiResponse {
+  return typeof data === 'object' && 
+    data !== null && 
+    ('results' in data);
+}
+
 export default function SecurityPage() {
-  const [incidents, setIncidents] = useState([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -16,7 +51,17 @@ export default function SecurityPage() {
       try {
         setLoading(true);
         const response = await securityService.getIncidents();
-        setIncidents(response.results || response);
+        
+        // Verificación de tipos en tiempo de ejecución
+        if (isIncidentArray(response)) {
+          setIncidents(response);
+        } else if (isApiResponse(response) && response.results) {
+          setIncidents(response.results);
+        } else {
+          console.warn('La respuesta de la API no coincide con los tipos esperados:', response);
+          setIncidents([]);
+          setError('Formato de datos inesperado');
+        }
       } catch (err) {
         console.error('Error fetching incidents:', err);
         setError('No se pudieron cargar los incidentes de seguridad');
@@ -28,8 +73,8 @@ export default function SecurityPage() {
     fetchIncidents();
   }, []);
 
-  const getSeverityColor = (severity) => {
-    switch (severity) {
+  const getSeverityColor = (severity: string): string => {
+    switch (severity.toLowerCase()) {
       case 'critical':
         return 'bg-red-100 text-red-800';
       case 'high':
@@ -43,8 +88,8 @@ export default function SecurityPage() {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
+  const getStatusColor = (status: string): string => {
+    switch (status.toLowerCase()) {
       case 'new':
         return 'bg-blue-100 text-blue-800';
       case 'in_progress':

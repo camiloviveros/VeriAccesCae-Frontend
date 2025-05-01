@@ -6,17 +6,35 @@ import { reportService } from '../../../lib/api';
 import Link from 'next/link';
 import { formatDate } from '../../../lib/utils';
 
+interface Report {
+  id: string;
+  name: string;
+  report_type: string;
+  description?: string;
+  created_at: string | Date;
+}
+
+interface ReportsResponse {
+  results?: Report[];
+}
+
 export default function ReportsPage() {
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     const fetchReports = async () => {
       try {
         setLoading(true);
-        const response = await reportService.getReports();
-        setReports(response.results || response);
+        const response = await reportService.getReports() as ReportsResponse | Report[];
+        
+        // Normalize response (could be array or object with results property)
+        const reportsData = Array.isArray(response) 
+          ? response 
+          : response.results || [];
+        
+        setReports(reportsData);
       } catch (err) {
         console.error('Error fetching reports:', err);
         setError('No se pudieron cargar los reportes');

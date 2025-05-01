@@ -45,10 +45,8 @@ export default function AccessPointForm({ accessPointId, isEdit = false }: Acces
       if (isEdit && accessPointId) {
         try {
           setInitialLoading(true);
-          // Corregido: Usar getAccessPoints y buscar el punto específico por ID
-          const accessPoints = await accessService.getAccessPoints();
-          
-
+          // Corregido: Añadir tipo a accessPoints
+          const accessPoints = await accessService.getAccessPoints() as AccessPoint[];
           
           const accessPoint = accessPoints.find((point: AccessPoint) => point.id === accessPointId);
           
@@ -89,11 +87,9 @@ export default function AccessPointForm({ accessPointId, isEdit = false }: Acces
     setError('');
     
     try {
-      // Corregido: Ya que no existen métodos específicos, adaptamos la lógica
+      // Corregido: Añadir tipo a accessPoints
       if (isEdit && accessPointId) {
-        // Implementación provisional para actualizar un punto de acceso
-        // Esto dependerá de cómo esté implementado tu API real
-        const accessPoints = await accessService.getAccessPoints();
+        const accessPoints = await accessService.getAccessPoints() as AccessPoint[];
         const updatedAccessPoints = accessPoints.map((point: AccessPoint) => 
           point.id === accessPointId ? { ...point, ...formData } : point
         );

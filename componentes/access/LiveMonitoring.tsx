@@ -21,6 +21,11 @@ interface AccessLog {
   direction: 'in' | 'out';
 }
 
+// Definir interface para la respuesta del servicio
+interface AccessLogsResponse {
+  results?: AccessLog[];
+}
+
 export default function LiveMonitoring() {
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +37,7 @@ export default function LiveMonitoring() {
   // Función para cargar los logs de acceso recientes
   const fetchLogs = async () => {
     try {
-      const response = await accessService.getAccessLogs({ limit: 10 });
+      const response = await accessService.getAccessLogs({ limit: 10 }) as AccessLogsResponse;
       setAccessLogs(response.results || []);
       setError('');
     } catch (err) {

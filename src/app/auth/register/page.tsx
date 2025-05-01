@@ -1,9 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '././../../../../lib/api';
+
+// Define un tipo para la respuesta del registro
+interface RegisterResponse {
+  access?: string;
+  refresh?: string;
+  user?: any;
+  [key: string]: any;
+}
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -17,6 +25,23 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Efecto para probar la conexión al backend
+  useEffect(() => {
+    // Función para probar la conexión al backend
+    const testBackend = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/auth/register/', {
+          method: 'HEAD'
+        });
+        console.log('Backend connection test:', response.status);
+      } catch (err) {
+        console.error('Backend connection test failed:', err);
+      }
+    };
+    
+    testBackend();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -32,19 +57,49 @@ export default function RegisterPage() {
     setError('');
     
     try {
-      const data = await authService.register(formData);
+      console.log("Enviando datos de registro:", formData);
+      const data = await authService.register(formData) as RegisterResponse;
+      console.log("Respuesta del registro:", data);
       
       // Si el registro incluye tokens, guardarlos
       if (data.access && data.refresh) {
         localStorage.setItem('access_token', data.access);
         localStorage.setItem('refresh_token', data.refresh);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+        
+        // Redireccionar al dashboard
+        router.push('/dashboard');
+      } else {
+        // Si no hay tokens, redireccionar al login
+        router.push('/auth/login');
+      }
+    } catch (err: any) {
+      console.error("Error completo:", err);
+      let errorMessage = 'Error al registrar usuario';
+      
+      if (err.response) {
+        // Extraer el mensaje de error de la respuesta
+        if (err.response.data) {
+          if (typeof err.response.data === 'string') {
+            errorMessage = err.response.data;
+          } else if (err.response.data.error) {
+            errorMessage = err.response.data.error;
+          } else if (err.response.data.detail) {
+            errorMessage = err.response.data.detail;
+          } else if (typeof err.response.data === 'object') {
+            // Si es un objeto de errores de validación (común en DRF)
+            const firstError = Object.entries(err.response.data)[0];
+            if (firstError && Array.isArray(firstError[1])) {
+              errorMessage = `${firstError[0]}: ${firstError[1][0]}`;
+            }
+          }
+        }
       }
       
-      // Redireccionar al login o al dashboard según la respuesta
-      router.push(data.access ? '/dashboard' : '/auth/login');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al registrar usuario');
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

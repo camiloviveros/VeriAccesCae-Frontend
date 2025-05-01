@@ -5,6 +5,32 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '././../../../../lib/api';
 
+// Interfaces para tipar la respuesta del login
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  // Agrega aquí otras propiedades del usuario si las conoces
+}
+
+interface LoginResponse {
+  access?: string;
+  refresh?: string;
+  user?: User;
+}
+
+interface ErrorResponse {
+  response?: {
+    data?: string | { 
+      error?: string;
+      detail?: string;
+      non_field_errors?: string[];
+      [key: string]: any;
+    };
+  };
+  message?: string;
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -18,17 +44,45 @@ export default function LoginPage() {
     setError('');
     
     try {
-      const data = await authService.login(username, password);
+      console.log("Intentando iniciar sesión con:", { username, password });
+      const data = await authService.login(username, password) as LoginResponse;
+      console.log("Respuesta del login:", data);
       
-      // Guardar tokens en localStorage
-      localStorage.setItem('access_token', data.access);
-      localStorage.setItem('refresh_token', data.refresh);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      // Guardar tokens en localStorage con verificación de existencia
+      if (data.access) {
+        localStorage.setItem('access_token', data.access);
+      }
+      if (data.refresh) {
+        localStorage.setItem('refresh_token', data.refresh);
+      }
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
       
       // Redireccionar al dashboard
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al iniciar sesión');
+    } catch (err: unknown) {
+      console.error("Error completo:", err);
+      let errorMessage = 'Error al iniciar sesión';
+      
+      // Manejo seguro del error con type guards
+      const error = err as ErrorResponse;
+      
+      if (error?.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.non_field_errors) {
+          errorMessage = error.response.data.non_field_errors[0];
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
