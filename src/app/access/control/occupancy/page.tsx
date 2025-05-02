@@ -6,21 +6,61 @@ import DashboardLayout from '../../../../../components/layout/DashboardLayout';
 import { Button } from '../../../../../components/ui/Button';
 import { Alert, AlertTitle } from '../../../../../components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../../../../components/ui/Card';
+import { accessService } from '../../../../../lib/api';
 
 export default function OccupancyControlPage() {
   const router = useRouter();
   const [occupancyCount, setOccupancyCount] = useState(0);
   const [maxOccupancy, setMaxOccupancy] = useState(100);
   const [message, setMessage] = useState('');
+  const [visitorsInside, setVisitorsInside] = useState(0);
+  const [totalInside, setTotalInside] = useState(0);
   
-  // Obtener datos iniciales del aforo (podría venir de una API)
+  // Obtener datos iniciales del aforo y visitantes
   useEffect(() => {
-    // Simulación de carga de datos
+    // Carga desde localStorage (contador de residentes)
     const storedCount = localStorage.getItem('occupancyCount');
     if (storedCount) {
-      setOccupancyCount(parseInt(storedCount, 10));
+      const count = parseInt(storedCount, 10);
+      setOccupancyCount(count);
     }
+    
+    // Cargar visitantes desde API
+    const fetchVisitors = async () => {
+      try {
+        const response = await accessService.getVisitors();
+        
+        // Procesar la respuesta
+        let visitors = [];
+        if (Array.isArray(response)) {
+          visitors = response;
+        } else if (response.results && Array.isArray(response.results)) {
+          visitors = response.results;
+        } else if (typeof response === 'object') {
+          visitors = Object.values(response).filter(v => 
+            typeof v === 'object' && v !== null && 'id' in v
+          );
+        }
+        
+        // Contar visitantes con estado 'inside'
+        const insideCount = visitors.filter(v => v.status === 'inside').length;
+        setVisitorsInside(insideCount);
+        
+        // Actualizar total
+        const residentCount = parseInt(storedCount || '0', 10);
+        setTotalInside(residentCount + insideCount);
+      } catch (err) {
+        console.error('Error fetching visitors:', err);
+      }
+    };
+    
+    fetchVisitors();
   }, []);
+  
+  // Actualizar el total cuando cambia el contador o los visitantes
+  useEffect(() => {
+    setTotalInside(occupancyCount + visitorsInside);
+  }, [occupancyCount, visitorsInside]);
   
   // Guardar cambios en localStorage cuando el contador cambie
   useEffect(() => {
@@ -54,7 +94,7 @@ export default function OccupancyControlPage() {
   };
   
   // Calcular el porcentaje de ocupación
-  const occupancyPercentage = (occupancyCount / maxOccupancy) * 100;
+  const occupancyPercentage = (totalInside / maxOccupancy) * 100;
   
   // Determinar el color según el porcentaje de ocupación
   const getProgressColor = () => {
@@ -87,12 +127,24 @@ export default function OccupancyControlPage() {
             <CardTitle className="text-center">Aforo del Edificio</CardTitle>
           </CardHeader>
           <CardContent className="py-8">
-            <div className="text-center mb-8">
-              <h2 className="text-5xl font-bold text-gray-900">{occupancyCount}/{maxOccupancy}</h2>
-              <p className="text-lg text-gray-500 mt-2">Personas dentro del edificio</p>
+            <div className="text-center mb-4">
+              <h2 className="text-5xl font-bold text-gray-900">{totalInside}/{maxOccupancy}</h2>
+              <p className="text-lg text-gray-500 mt-2">Personas totales dentro del edificio</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <div className="bg-blue-50 p-4 rounded-lg text-center">
+                <h3 className="text-xl font-semibold text-blue-700">{occupancyCount}</h3>
+                <p className="text-sm text-blue-600">Residentes</p>
+              </div>
+              
+              <div className="bg-green-50 p-4 rounded-lg text-center">
+                <h3 className="text-xl font-semibold text-green-700">{visitorsInside}</h3>
+                <p className="text-sm text-green-600">Visitantes</p>
+              </div>
             </div>
             
-            <div className="w-full bg-gray-200 rounded-full h-4 mb-6">
+            <div className="w-full bg-gray-200 rounded-full h-4 mt-8">
               <div 
                 className={`h-4 rounded-full ${getProgressColor()}`} 
                 style={{ width: `${Math.min(occupancyPercentage, 100)}%` }}
@@ -105,7 +157,7 @@ export default function OccupancyControlPage() {
                 disabled={occupancyCount >= maxOccupancy}
                 className="px-8 py-4 text-lg"
               >
-                Agregar Persona
+                Agregar Residente
               </Button>
               <Button 
                 variant="secondary"
@@ -113,15 +165,15 @@ export default function OccupancyControlPage() {
                 disabled={occupancyCount <= 0}
                 className="px-8 py-4 text-lg"
               >
-                Remover Persona
+                Remover Residente
               </Button>
             </div>
           </CardContent>
           <CardFooter className="bg-gray-50 border-t">
             <div className="w-full text-center text-sm text-gray-500">
-              {occupancyCount === 0 ? (
+              {totalInside === 0 ? (
                 <p>El edificio está vacío</p>
-              ) : occupancyCount >= maxOccupancy ? (
+              ) : totalInside >= maxOccupancy ? (
                 <p className="text-red-500 font-medium">¡Aforo máximo alcanzado! No se permiten más entradas.</p>
               ) : occupancyPercentage >= 80 ? (
                 <p className="text-yellow-600">El edificio está llegando a su capacidad máxima</p>

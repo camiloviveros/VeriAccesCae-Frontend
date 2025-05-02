@@ -46,6 +46,7 @@ export default function DashboardPage() {
     regularVisitors: 0,
     temporaryVisitors: 0,
     peopleInside: 0,
+    visitorsInside: 0,
     recentAccessLogs: [] as AccessLog[]
   });
   const [occupancyCount, setOccupancyCount] = useState(0);
@@ -56,10 +57,6 @@ export default function DashboardPage() {
       const storedCount = localStorage.getItem('occupancyCount');
       if (storedCount) {
         setOccupancyCount(parseInt(storedCount, 10));
-        setStats(prev => ({
-          ...prev,
-          peopleInside: parseInt(storedCount, 10)
-        }));
       }
     };
 
@@ -133,7 +130,7 @@ export default function DashboardPage() {
         ).length;
         
         // Personas dentro del edificio (visitantes con acceso permitido)
-        const peopleInside = visitors.filter(v => v.status === 'inside').length;
+        const visitorsInside = visitors.filter(v => v.status === 'inside').length;
         
         // Obtener el contador de aforo actual de localStorage si existe
         let storedOccupancy = 0;
@@ -148,12 +145,16 @@ export default function DashboardPage() {
           console.error('Error reading occupancy from localStorage:', err);
         }
         
+        // Total de personas dentro = residentes (del contador de aforo) + visitantes
+        const totalPeopleInside = storedOccupancy + visitorsInside;
+        
         setStats({
           totalVisitors: visitors.length,
           businessVisitors,
           regularVisitors,
           temporaryVisitors,
-          peopleInside: Math.max(peopleInside, storedOccupancy), // Usar el mayor de los dos valores
+          peopleInside: totalPeopleInside,
+          visitorsInside,
           recentAccessLogs: accessLogs
         });
       } catch (err) {
@@ -172,14 +173,6 @@ export default function DashboardPage() {
     // Limpiar el intervalo al desmontar el componente
     return () => clearInterval(intervalId);
   }, []);
-
-  // Actualizar peopleInside cuando cambie occupancyCount
-  useEffect(() => {
-    setStats(prev => ({
-      ...prev,
-      peopleInside: occupancyCount
-    }));
-  }, [occupancyCount]);
 
   return (
     <DashboardLayout>
@@ -234,7 +227,12 @@ export default function DashboardPage() {
                 <div className="mt-2 flex justify-between items-center">
                   <div>
                     <p className="text-3xl font-semibold text-gray-900">{stats.peopleInside}</p>
-                    <p className="text-sm text-gray-500">Personas actualmente dentro</p>
+                    <div className="mt-1 text-sm text-gray-500">
+                      <p>Personas actualmente dentro</p>
+                      <p className="text-xs mt-1">
+                        {occupancyCount} residentes + {stats.visitorsInside} visitantes
+                      </p>
+                    </div>
                   </div>
                   <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center">
                     <UserGroupIcon className="h-8 w-8 text-green-600" />

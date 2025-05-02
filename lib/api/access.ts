@@ -58,7 +58,7 @@ export interface VisitorResponse {
   apartment_number?: string;
   entry_date?: string;
   exit_date?: string;
-  status?: string;
+  status?: 'pending' | 'inside' | 'outside' | 'denied';
   created_at: string;
   [key: string]: any;
 }
@@ -232,7 +232,9 @@ export const createVisitor = async (data: FormData | Record<string, any>): Promi
 
 export const updateVisitorStatus = async (id: string | number, status: string): Promise<VisitorResponse> => {
   try {
+    console.log(`Actualizando estado del visitante ${id} a: ${status}`);
     const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
+    console.log('Respuesta de actualización de estado:', response.data);
     return response.data;
   } catch (error) {
     console.error(`Error updating visitor status (${id}):`, error);
@@ -242,7 +244,9 @@ export const updateVisitorStatus = async (id: string | number, status: string): 
 
 export const deleteVisitor = async (id: string | number): Promise<void> => {
   try {
+    console.log(`Eliminando visitante ${id}`);
     await apiClient.delete(`/access/visitors/${id}/`);
+    console.log(`Visitante ${id} eliminado correctamente`);
   } catch (error) {
     console.error(`Error deleting visitor (${id}):`, error);
     throw error;

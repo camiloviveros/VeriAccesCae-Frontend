@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../lib/api'; // Mantener la misma ruta de importación
+import { accessService } from '../../../../lib/api';
 import { Alert, AlertTitle } from '../../../../components/ui/Alert';
 import { Button } from '../../../../components/ui/Button';
 import { Loading } from '../../../../components/ui/Loading';
@@ -84,9 +84,8 @@ export default function AccessControlPage() {
       const insideVisitors = visitorsList.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       
-      // Actualizar el count de ocupación con el mayor valor entre los visitantes dentro y el almacenado
-      const visitorCount = insideVisitors.length;
-      setOccupancyCount(prev => Math.max(prev, visitorCount));
+      // No modificar el contador de aforo con los visitantes
+      // El contador de aforo es independiente y solo para residentes
     } catch (err) {
       console.error('Error fetching visitors:', err);
       setError('No se pudieron cargar los visitantes');
@@ -97,10 +96,8 @@ export default function AccessControlPage() {
 
   const handleAllowAccess = async (visitor: Visitor) => {
     try {
-      if (occupancyCount >= maxOccupancy) {
-        setError(`No se puede permitir el acceso. El edificio ha alcanzado su capacidad máxima (${maxOccupancy} personas).`);
-        return;
-      }
+      // No verificamos el aforo máximo para visitantes
+      // ya que los visitantes no afectan el contador de aforo
       
       // Actualizar el visitante en el backend
       await accessService.updateVisitorStatus(visitor.id, 'inside');
@@ -113,10 +110,6 @@ export default function AccessControlPage() {
       
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
-      setOccupancyCount(insideVisitors.length);
-      
-      // Guardar el contador en localStorage
-      localStorage.setItem('occupancyCount', insideVisitors.length.toString());
       
       setSuccessMessage(`Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -158,10 +151,6 @@ export default function AccessControlPage() {
       
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
-      setOccupancyCount(insideVisitors.length);
-      
-      // Guardar el contador en localStorage
-      localStorage.setItem('occupancyCount', insideVisitors.length.toString());
       
       setSuccessMessage(`Salida registrada para ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -189,13 +178,10 @@ export default function AccessControlPage() {
       const updatedVisitors = visitors.filter(v => v.id !== selectedVisitor.id);
       setVisitors(updatedVisitors);
       
+      // Actualizar la lista de personas dentro (solo si el visitante estaba dentro)
       if (selectedVisitor.status === 'inside') {
         const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
         setPeopleInside(insideVisitors);
-        setOccupancyCount(insideVisitors.length);
-        
-        // Guardar el contador en localStorage
-        localStorage.setItem('occupancyCount', insideVisitors.length.toString());
       }
       
       setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado`);
@@ -298,7 +284,7 @@ export default function AccessControlPage() {
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Control de Aforo</h3>
             <div className="mt-2 max-w-xl text-sm text-gray-500">
-              <p>Personas dentro del edificio: {occupancyCount}/{maxOccupancy}</p>
+              <p>Personas (residentes) dentro del edificio: {occupancyCount}/{maxOccupancy}</p>
             </div>
             <div className="mt-5">
               <div className="flex space-x-3">
