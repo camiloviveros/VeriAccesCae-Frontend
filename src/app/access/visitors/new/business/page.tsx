@@ -16,6 +16,7 @@ interface FormData {
   company: string;
   photo: File | null;
   visitor_type: string;
+  status: string;
 }
 
 export default function NewBusinessVisitorPage() {
@@ -27,7 +28,8 @@ export default function NewBusinessVisitorPage() {
     email: '',
     company: '',
     photo: null,
-    visitor_type: 'business'
+    visitor_type: 'business',
+    status: 'pending'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -50,7 +52,7 @@ export default function NewBusinessVisitorPage() {
         photo: file
       }));
       
-      // Crear URL para previsualización
+      // Create URL for preview
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
@@ -67,10 +69,10 @@ export default function NewBusinessVisitorPage() {
     setError('');
     
     try {
-      // Crear un FormData para enviar correctamente los datos con archivos
+      // Create a FormData to send data correctly with files
       const formDataToSend = new FormData();
       
-      // Añadir cada campo al FormData
+      // Add each field to FormData
       Object.entries(formData).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
           if (key === 'photo' && value instanceof File) {
@@ -81,7 +83,7 @@ export default function NewBusinessVisitorPage() {
         }
       });
 
-      // Llamar a la API para crear un visitante
+      // Call API to create visitor
       await accessService.createVisitor(formDataToSend);
       router.push('/access/visitors');
     } catch (err: unknown) {
@@ -95,7 +97,7 @@ export default function NewBusinessVisitorPage() {
           if (typeof axiosError.response.data === 'string') {
             setError(axiosError.response.data);
           } else if (typeof axiosError.response.data === 'object') {
-            // Formatear errores de validación
+            // Format validation errors
             const errorMessages = Object.entries(axiosError.response.data)
               .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
               .join('; ');

@@ -1,4 +1,3 @@
-// src/app/access/visitors/new/temporary/page.tsx
 'use client';
 
 import { useState, FormEvent } from 'react';
@@ -17,6 +16,7 @@ interface FormData {
   entry_date: string;
   exit_date: string;
   visitor_type: string;
+  status: string;
 }
 
 export default function NewTemporaryVisitorPage() {
@@ -28,13 +28,14 @@ export default function NewTemporaryVisitorPage() {
     apartment_number: '',
     entry_date: '',
     exit_date: '',
-    visitor_type: 'temporary'
+    visitor_type: 'temporary',
+    status: 'pending'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
 
-  // Establecer fechas mínimas por defecto (hoy para entrada y salida)
+  // Set default minimum dates (today for entry and exit)
   const today = new Date().toISOString().split('T')[0];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,7 +51,7 @@ export default function NewTemporaryVisitorPage() {
     setLoading(true);
     setError('');
     
-    // Validación de fechas
+    // Date validation
     if (formData.entry_date > formData.exit_date) {
       setError('La fecha de salida debe ser posterior a la fecha de entrada');
       setLoading(false);
@@ -58,17 +59,17 @@ export default function NewTemporaryVisitorPage() {
     }
     
     try {
-      // Crear un FormData para enviar los datos
+      // Create a FormData to send data
       const formDataToSend = new FormData();
       
-      // Añadir cada campo al FormData
+      // Add each field to FormData
       Object.entries(formData).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
           formDataToSend.append(key, value);
         }
       });
 
-      // Llamar a la API para crear un visitante
+      // Call API to create visitor
       await accessService.createVisitor(formDataToSend);
       router.push('/access/visitors');
     } catch (err: unknown) {
@@ -82,7 +83,7 @@ export default function NewTemporaryVisitorPage() {
           if (typeof axiosError.response.data === 'string') {
             setError(axiosError.response.data);
           } else if (typeof axiosError.response.data === 'object') {
-            // Formatear errores de validación
+            // Format validation errors
             const errorMessages = Object.entries(axiosError.response.data)
               .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
               .join('; ');

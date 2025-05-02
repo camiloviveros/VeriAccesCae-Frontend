@@ -1,4 +1,3 @@
-// src/app/access/control/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -31,7 +30,7 @@ const parseVisitorStatus = (status?: string): 'pending' | 'inside' | 'outside' |
   if (status === 'pending' || status === 'inside' || status === 'outside' || status === 'denied') {
     return status as 'pending' | 'inside' | 'outside' | 'denied';
   }
-  return 'pending'; // Valor por defecto en vez de undefined
+  return 'pending'; // Default value instead of undefined
 };
 
 const ensureVisitor = (visitor: any): Visitor => {
@@ -58,12 +57,35 @@ export default function AccessControlPage() {
   useEffect(() => {
     fetchVisitors();
     
-    // Cargar el contador de aforo desde localStorage
+    // Load occupancy counter from localStorage
     const storedCount = localStorage.getItem('occupancyCount');
     if (storedCount) {
       setOccupancyCount(parseInt(storedCount, 10));
     }
-  }, []);
+    
+    // Set up timer to check for expiring temporary visitors
+    const checkExpiringVisitors = () => {
+      const now = new Date();
+      // Find visitors whose exit time is within 15 minutes
+      const expiringVisitors = visitors.filter(visitor => 
+        visitor.visitor_type === 'temporary' && 
+        visitor.status === 'inside' && 
+        visitor.exit_date && 
+        new Date(visitor.exit_date) > now &&
+        new Date(visitor.exit_date).getTime() - now.getTime() < 15 * 60 * 1000 // 15 minutes
+      );
+      
+      if (expiringVisitors.length > 0) {
+        setError('Alerta: Hay visitantes temporales cuyo tiempo de visita está por expirar en los próximos 15 minutos.');
+      }
+    };
+    
+    const intervalId = setInterval(checkExpiringVisitors, 60000); // Check every minute
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [visitors]);
 
   const fetchVisitors = async () => {
     try {
@@ -84,6 +106,20 @@ export default function AccessControlPage() {
       setVisitors(visitorsList);
       const insideVisitors = visitorsList.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
+      
+      // Check for expired visitors
+      const now = new Date();
+      const timeExpiredVisitors = visitorsList.filter(visitor => 
+        visitor.visitor_type === 'temporary' && 
+        visitor.status === 'inside' && 
+        visitor.exit_date && 
+        new Date(visitor.exit_date) < now
+      );
+      
+      if (timeExpiredVisitors.length > 0) {
+        const expiredNames = timeExpiredVisitors.map(v => `${v.first_name} ${v.last_name}`).join(', ');
+        setError(`🔔 Tiempo cumplido para: ${expiredNames} - Reportar salida en el control de acceso`);
+      }
     } catch (err) {
       console.error('Error fetching visitors:', err);
       setError('No se pudieron cargar los visitantes');
@@ -94,10 +130,15 @@ export default function AccessControlPage() {
 
   const handleAllowAccess = async (visitor: Visitor) => {
     try {
-      // Actualizar el visitante en el backend
+      if (occupancyCount >= maxOccupancy) {
+        setError(`No se puede permitir el acceso. El edificio ha alcanzado su capacidad máxima (${maxOccupancy} personas).`);
+        return;
+      }
+      
+      // Update visitor in backend
       await accessService.updateVisitorStatus(visitor.id, 'inside');
       
-      // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
+      // Update in local state - use as const to ensure correct type
       const updatedVisitors = visitors.map(v => 
         v.id === visitor.id ? {...v, status: 'inside' as const} : v
       );
@@ -105,6 +146,13 @@ export default function AccessControlPage() {
       
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
+      
+      // If it's a temporary visitor, log entry time
+      if (visitor.visitor_type === 'temporary') {
+        const entryDate = new Date();
+        // This would normally update entry_date in the backend, but we're just updating UI for now
+        console.log(`Visitor ${visitor.id} entered at ${entryDate.toISOString()}`);
+      }
       
       setSuccessMessage(`Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -116,10 +164,10 @@ export default function AccessControlPage() {
 
   const handleDenyAccess = async (visitor: Visitor) => {
     try {
-      // Actualizar el visitante en el backend
+      // Update visitor in backend
       await accessService.updateVisitorStatus(visitor.id, 'denied');
       
-      // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
+      // Update in local state - use as const to ensure correct type
       const updatedVisitors = visitors.map(v => 
         v.id === visitor.id ? {...v, status: 'denied' as const} : v
       );
@@ -135,10 +183,10 @@ export default function AccessControlPage() {
 
   const handleExitBuilding = async (visitor: Visitor) => {
     try {
-      // Actualizar el visitante en el backend
+      // Update visitor in backend
       await accessService.updateVisitorStatus(visitor.id, 'outside');
       
-      // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
+      // Update in local state - use as const to ensure correct type
       const updatedVisitors = visitors.map(v => 
         v.id === visitor.id ? {...v, status: 'outside' as const} : v
       );
@@ -146,6 +194,13 @@ export default function AccessControlPage() {
       
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
+      
+      // If it's a temporary visitor, log exit time
+      if (visitor.visitor_type === 'temporary') {
+        const exitDate = new Date();
+        // This would normally update exit_date in the backend, but we're just updating UI for now
+        console.log(`Visitor ${visitor.id} exited at ${exitDate.toISOString()}`);
+      }
       
       setSuccessMessage(`Salida registrada para ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -166,14 +221,14 @@ export default function AccessControlPage() {
     try {
       setIsDeletingVisitor(true);
       
-      // Eliminar visitante del backend
+      // Delete visitor from backend
       await accessService.deleteVisitor(selectedVisitor.id);
       
-      // Actualizar en el estado local
+      // Update in local state
       const updatedVisitors = visitors.filter(v => v.id !== selectedVisitor.id);
       setVisitors(updatedVisitors);
       
-      // Actualizar la lista de personas dentro (solo si el visitante estaba dentro)
+      // Update the list of people inside (only if visitor was inside)
       if (selectedVisitor.status === 'inside') {
         const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
         setPeopleInside(insideVisitors);
@@ -204,37 +259,51 @@ export default function AccessControlPage() {
     }
   };
 
-  useEffect(() => {
-    const now = new Date();
-    const timeExpiredVisitors = visitors.filter(visitor => 
-      visitor.visitor_type === 'temporary' && 
-      visitor.status === 'inside' && 
-      visitor.exit_date && 
-      new Date(visitor.exit_date) < now
-    );
+  const getRemainingTime = (exitDate?: string) => {
+    if (!exitDate) return null;
     
-    if (timeExpiredVisitors.length > 0) {
-      timeExpiredVisitors.forEach(visitor => {
-        setError(prev => 
-          prev ? 
-          `${prev}\n🔔 Tiempo cumplido para ${visitor.first_name} ${visitor.last_name} - Reportar salida en el control de acceso` : 
-          `🔔 Tiempo cumplido para ${visitor.first_name} ${visitor.last_name} - Reportar salida en el control de acceso`
-        );
-      });
+    const exitTime = new Date(exitDate);
+    const now = new Date();
+    
+    // If already expired
+    if (exitTime < now) {
+      return <span className="text-red-600 font-medium">Tiempo expirado</span>;
     }
-  }, [visitors]);
+    
+    const diffMs = exitTime.getTime() - now.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMins < 15) {
+      return <span className="text-red-600 font-medium">Menos de 15 minutos</span>;
+    } else if (diffMins < 60) {
+      return <span className="text-yellow-600">{diffMins} minutos</span>;
+    } else {
+      const hours = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      return <span>{hours}h {mins}m</span>;
+    }
+  };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-semibold text-gray-900">Control de Acceso</h1>
-          <Link 
-            href="/access/control/occupancy" 
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            Control de Aforo
-          </Link>
+          <div className="flex space-x-2">
+            <Button 
+              onClick={() => fetchVisitors()}
+              variant="outline"
+              size="sm"
+            >
+              Actualizar
+            </Button>
+            <Link 
+              href="/access/control/occupancy" 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Control de Aforo
+            </Link>
+          </div>
         </div>
 
         {error && (
@@ -257,7 +326,7 @@ export default function AccessControlPage() {
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Control de Aforo</h3>
             <div className="mt-2 max-w-xl text-sm text-gray-500">
-              <p>Personas dentro del edificio: {occupancyCount}/{maxOccupancy}</p>
+              <p>Personas dentro del edificio: {peopleInside.length}/{maxOccupancy}</p>
             </div>
           </div>
         </div>
@@ -313,9 +382,16 @@ export default function AccessControlPage() {
                           {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
                           {visitor.phone && <p>Teléfono: {visitor.phone}</p>}
                           {visitor.entry_date && visitor.exit_date && (
-                            <p>
-                              Visita: {new Date(visitor.entry_date).toLocaleString()} - {new Date(visitor.exit_date).toLocaleString()}
-                            </p>
+                            <div>
+                              <p>
+                                Visita: {new Date(visitor.entry_date).toLocaleString()} - {new Date(visitor.exit_date).toLocaleString()}
+                              </p>
+                              {visitor.status === 'inside' && (
+                                <p className="text-xs mt-1">
+                                  Tiempo restante: {getRemainingTime(visitor.exit_date)}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -415,9 +491,12 @@ export default function AccessControlPage() {
                           <p>{visitor.visitor_type || (visitor.company ? 'Empresa' : visitor.entry_date ? 'Temporal' : 'Normal')}</p>
                           {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
                           {visitor.entry_date && visitor.exit_date && (
-                            <p>
-                              Visita hasta: {new Date(visitor.exit_date).toLocaleString()}
-                            </p>
+                            <div>
+                              <p>Visita hasta: {new Date(visitor.exit_date).toLocaleString()}</p>
+                              <p className="text-xs mt-1">
+                                Tiempo restante: {getRemainingTime(visitor.exit_date)}
+                              </p>
+                            </div>
                           )}
                         </div>
                       </div>

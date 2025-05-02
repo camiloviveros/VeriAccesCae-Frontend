@@ -1,4 +1,3 @@
-// src/app/access/visitors/new/regular/page.tsx
 'use client';
 
 import { useState, FormEvent } from 'react';
@@ -15,6 +14,7 @@ interface FormData {
   phone: string;
   apartment_number: string;
   visitor_type: string;
+  status: string;
 }
 
 export default function NewRegularVisitorPage() {
@@ -24,7 +24,8 @@ export default function NewRegularVisitorPage() {
     id_number: '',
     phone: '',
     apartment_number: '',
-    visitor_type: 'regular'
+    visitor_type: 'regular',
+    status: 'pending'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -44,17 +45,17 @@ export default function NewRegularVisitorPage() {
     setError('');
     
     try {
-      // Crear un FormData para enviar los datos
+      // Create a FormData to send data
       const formDataToSend = new FormData();
       
-      // Añadir cada campo al FormData
+      // Add each field to FormData
       Object.entries(formData).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
           formDataToSend.append(key, value);
         }
       });
 
-      // Llamar a la API para crear un visitante
+      // Call API to create visitor
       await accessService.createVisitor(formDataToSend);
       router.push('/access/visitors');
     } catch (err: unknown) {
@@ -68,7 +69,7 @@ export default function NewRegularVisitorPage() {
           if (typeof axiosError.response.data === 'string') {
             setError(axiosError.response.data);
           } else if (typeof axiosError.response.data === 'object') {
-            // Formatear errores de validación
+            // Format validation errors
             const errorMessages = Object.entries(axiosError.response.data)
               .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
               .join('; ');

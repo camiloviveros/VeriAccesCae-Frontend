@@ -122,6 +122,12 @@ apiClient.interceptors.response.use(
               console.info('Intentando recuperarse del error 500 en getVisitors devolviendo un array vacío');
               return { data: [] };
             }
+            else if (originalRequest.method === 'post' || originalRequest.method === 'patch') {
+              // For POST/PATCH, let the error propagate but with a clearer message
+              console.error('Error al crear o actualizar visitante - posible problema con el campo status');
+              const enhancedError = new Error('Error al procesar visitante: La base de datos puede necesitar migración para agregar campos necesarios');
+              throw enhancedError;
+            }
           }
           break;
         default:

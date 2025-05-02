@@ -110,7 +110,7 @@ export const getAccessPoints = async (): Promise<AccessPointResponse[] | Paginat
   try {
     const response = await apiClient.get<AccessPointResponse[] | PaginatedResponse<AccessPointResponse>>('/access/access-points/');
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error getting access points:", error);
     throw error;
   }
@@ -120,7 +120,7 @@ export const getAccessPoint = async (id: string | number): Promise<AccessPointRe
   try {
     const response = await apiClient.get<AccessPointResponse>(`/access/access-points/${id}/`);
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error getting access point ${id}:`, error);
     throw error;
   }
@@ -131,7 +131,7 @@ export const createAccessPoint = async (data: Partial<AccessPointResponse>): Pro
     console.log("Enviando datos para crear punto de acceso:", data);
     const response = await apiClient.post<AccessPointResponse>('/access/access-points/', data);
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error creating access point:", error);
     throw error;
   }
@@ -142,7 +142,7 @@ export const updateAccessPoint = async (id: string | number, data: Partial<Acces
     console.log(`Actualizando punto de acceso ${id}:`, data);
     const response = await apiClient.patch<AccessPointResponse>(`/access/access-points/${id}/`, data);
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error updating access point ${id}:`, error);
     throw error;
   }
@@ -151,7 +151,7 @@ export const updateAccessPoint = async (id: string | number, data: Partial<Acces
 export const deleteAccessPoint = async (id: string | number): Promise<void> => {
   try {
     await apiClient.delete(`/access/access-points/${id}/`);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error deleting access point ${id}:`, error);
     throw error;
   }
@@ -161,7 +161,7 @@ export const getAccessZones = async (): Promise<AccessZoneResponse[] | Paginated
   try {
     const response = await apiClient.get<AccessZoneResponse[] | PaginatedResponse<AccessZoneResponse>>('/access/access-zones/');
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error getting access zones:", error);
     throw error;
   }
@@ -171,7 +171,7 @@ export const getAccessLogs = async (params: Record<string, any> = {}): Promise<A
   try {
     const response = await apiClient.get<PaginatedResponse<AccessLogResponse>>('/access/access-logs/', { params });
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error getting access logs:", error);
     // Devolver un array vacío en caso de error para evitar errores en cascada
     return [];
@@ -182,23 +182,32 @@ export const getVisitors = async (): Promise<VisitorResponse[] | PaginatedRespon
   try {
     const response = await apiClient.get<VisitorResponse[] | PaginatedResponse<VisitorResponse>>('/access/visitors/');
     
-    // Verificar si la respuesta es válida antes de devolverla
+    // Check if response is valid before returning it
     if (response && response.data) {
       return response.data;
     } else {
-      // Si la respuesta es vacía, devolver un array vacío
-      console.warn("La respuesta del servidor está vacía");
+      // If response is empty, return an empty array
+      console.warn("Server response is empty");
       return [];
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error getting visitors:", error);
-    // Devolver un array vacío en caso de error para evitar errores en cascada
+    // Return an empty array in case of error to avoid cascading errors
     return [];
   }
 };
 
 export const createVisitor = async (data: FormData | Record<string, any>): Promise<VisitorResponse> => {
   try {
+    // Ensure status field exists in the data
+    if (data instanceof FormData) {
+      if (!data.has('status')) {
+        data.append('status', 'pending');
+      }
+    } else if (!('status' in data)) {
+      data = { ...data, status: 'pending' };
+    }
+
     // Si los datos ya son FormData, usarlos directamente
     if (data instanceof FormData) {
       const response = await apiClient.post<VisitorResponse>('/access/visitors/', data, {
@@ -234,31 +243,41 @@ export const createVisitor = async (data: FormData | Record<string, any>): Promi
     });
     
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error creating visitor:", error);
+    
+    // Create more informative error for potential database issues
+    const err = error as any; // Usamos 'any' para evitar errores de TypeScript
+    if (err?.response?.status === 500 && err?.config?.url?.includes('/access/visitors/')) {
+      throw new Error('Error al crear visitante: Es posible que la base de datos necesite una migración para agregar campos necesarios como "status" al modelo Visitor');
+    }
+    
     throw error;
   }
 };
 
 export const updateVisitorStatus = async (id: string | number, status: string): Promise<VisitorResponse> => {
   try {
-    console.log(`Actualizando estado del visitante ${id} a: ${status}`);
+    console.log(`Updating visitor ${id} status to: ${status}`);
     
-    // Intentar primero con la ruta específica para update_status
+    // First try with dedicated endpoint
     try {
       const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/update_status/`, { status });
-      console.log('Respuesta de actualización de estado:', response.data);
+      console.log('Status update response:', response.data);
       return response.data;
-    } catch (firstError) {
-      // Si falla, intentar con la ruta estándar de actualización
-      console.log('Intentando ruta alternativa para actualización de estado');
+    } catch (firstError: unknown) {
+      console.log('Trying alternative route for status update');
+      // If first attempt fails, try with standard update endpoint
       const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
-      console.log('Respuesta de actualización de estado (ruta alternativa):', response.data);
+      console.log('Status update response (alternative route):', response.data);
       return response.data;
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error updating visitor status (${id}):`, error);
-    throw error;
+    
+    // Create a clearer error message
+    const enhancedError = new Error('Error al actualizar estado del visitante. Verificar si la base de datos tiene el campo "status".');
+    throw enhancedError;
   }
 };
 
@@ -267,8 +286,17 @@ export const deleteVisitor = async (id: string | number): Promise<void> => {
     console.log(`Eliminando visitante ${id}`);
     await apiClient.delete(`/access/visitors/${id}/`);
     console.log(`Visitante ${id} eliminado correctamente`);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error deleting visitor (${id}):`, error);
+    
+    // Create more specific error message
+    const err = error as any; // Usamos 'any' para evitar errores de TypeScript
+    if (err?.response?.status === 404) {
+      throw new Error(`Visitante con ID ${id} no encontrado o ya fue eliminado`);
+    } else if (err?.response?.status === 500) {
+      throw new Error(`Error al eliminar visitante: Problema en el servidor`);
+    }
+    
     throw error;
   }
 };
@@ -278,7 +306,7 @@ export const getOccupancyStats = async (): Promise<{current: number, max: number
     // Esto podría ser un endpoint específico en tu backend
     const response = await apiClient.get<{current: number, max: number}>('/access/stats/occupancy/');
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting occupancy stats:', error);
     // Devolver datos predeterminados en caso de error
     return { current: 0, max: 100 };
@@ -322,8 +350,9 @@ export const createVisitorAccess = async (data: VisitorAccessData): Promise<Visi
     });
     
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error creating visitor access:", error);
+    const err = error as any; // Usamos 'any' para evitar errores de TypeScript
     throw error;
   }
 };
@@ -332,7 +361,7 @@ export const getQRCode = async (id: string | number): Promise<QRCodeResponse> =>
   try {
     const response = await apiClient.get<QRCodeResponse>(`/access/visitor-access/${id}/qr_image/`);
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error getting QR code:", error);
     throw error;
   }
@@ -342,7 +371,7 @@ export const remoteControl = async (id: string | number, action: 'lock' | 'unloc
   try {
     const response = await apiClient.post<{detail: string}>(`/access/access-points/${id}/remote_control/`, { action });
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error in remote control (${action}):`, error);
     throw error;
   }
