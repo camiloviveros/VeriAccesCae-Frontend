@@ -176,13 +176,13 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+      <div className="space-y-6 p-6 bg-gray-50">
+        <h1 className="text-2xl font-bold text-gray-800">Panel de Control</h1>
         
         {error && <Alert variant="error">{error}</Alert>}
         
         {loading ? (
-          <div className="flex justify-center items-center h-64">
+          <div className="flex justify-center items-center h-64 bg-white rounded-lg shadow-md">
             <Loading size="lg" message="Cargando datos del dashboard..." />
           </div>
         ) : (
@@ -190,62 +190,138 @@ export default function DashboardPage() {
             {/* Estadísticas principales */}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {/* Total de visitantes */}
-              <StatCard 
-                title="Total de Visitantes" 
-                value={stats.totalVisitors} 
-                icon={<UserGroupIcon className="h-6 w-6 text-primary-600" />}
-              />
+              <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0 bg-gray-100 rounded-md p-3">
+                      <UserGroupIcon className="h-6 w-6 text-gray-700" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-600 truncate">
+                          Total de Visitantes
+                        </dt>
+                        <dd>
+                          <div className="text-lg font-bold text-gray-900">
+                            {stats.totalVisitors}
+                          </div>
+                        </dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
               
               {/* Visitantes empresariales */}
-              <StatCard 
-                title="Visitantes Empresa" 
-                value={stats.businessVisitors} 
-                icon={<BuildingOffice2Icon className="h-6 w-6 text-green-600" />}
-              />
+              <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
+                      <BuildingOffice2Icon className="h-6 w-6 text-green-700" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-600 truncate">
+                          Visitantes Empresa
+                        </dt>
+                        <dd>
+                          <div className="text-lg font-bold text-gray-900">
+                            {stats.businessVisitors}
+                          </div>
+                        </dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
               
               {/* Visitantes normales */}
-              <StatCard 
-                title="Visitantes Normales" 
-                value={stats.regularVisitors} 
-                icon={<UserCircleIcon className="h-6 w-6 text-blue-600" />}
-              />
+              <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0 bg-blue-100 rounded-md p-3">
+                      <UserCircleIcon className="h-6 w-6 text-blue-700" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-600 truncate">
+                          Visitantes Normales
+                        </dt>
+                        <dd>
+                          <div className="text-lg font-bold text-gray-900">
+                            {stats.regularVisitors}
+                          </div>
+                        </dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
               
               {/* Visitantes temporales */}
-              <StatCard 
-                title="Visitantes Temporales" 
-                value={stats.temporaryVisitors} 
-                icon={<ClockIcon className="h-6 w-6 text-yellow-600" />}
-              />
+              <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0 bg-yellow-100 rounded-md p-3">
+                      <ClockIcon className="h-6 w-6 text-yellow-700" />
+                    </div>
+                    <div className="ml-5 w-0 flex-1">
+                      <dl>
+                        <dt className="text-sm font-medium text-gray-600 truncate">
+                          Visitantes Temporales
+                        </dt>
+                        <dd>
+                          <div className="text-lg font-bold text-gray-900">
+                            {stats.temporaryVisitors}
+                          </div>
+                        </dd>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             
             {/* Aforo del edificio */}
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">
+            <div className="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+              <div className="px-6 py-5 sm:p-6">
+                <h3 className="text-lg leading-6 font-semibold text-gray-800">
                   Aforo del Edificio
                 </h3>
-                <div className="mt-2 flex justify-between items-center">
+                <div className="mt-4 flex justify-between items-center">
                   <div>
-                    <p className="text-3xl font-semibold text-gray-900">{stats.peopleInside}</p>
-                    <div className="mt-1 text-sm text-gray-500">
+                    <p className="text-3xl font-bold text-gray-900">{stats.peopleInside}</p>
+                    <div className="mt-1 text-sm text-gray-600">
                       <p>Personas actualmente dentro</p>
-                      <p className="text-xs mt-1">
+                      <p className="text-sm mt-1">
                         {occupancyCount} residentes + {stats.visitorsInside} visitantes
                       </p>
                     </div>
                   </div>
-                  <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center">
-                    <UserGroupIcon className="h-8 w-8 text-green-600" />
+                  <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center shadow">
+                    <UserGroupIcon className="h-8 w-8 text-green-700" />
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-6">
                   <div className="relative pt-1">
-                    <div className="overflow-hidden h-3 text-xs flex rounded bg-gray-200">
+                    <div className="flex mb-2 items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-gray-600 bg-gray-200">
+                          Ocupación
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-semibold inline-block text-gray-600">
+                          {Math.min((stats.peopleInside / 100) * 100, 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden h-3 text-xs flex rounded-full bg-gray-200">
                       <div
                         style={{ width: `${Math.min((stats.peopleInside / 100) * 100, 100)}%` }}
-                        className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
-                          stats.peopleInside < 50 ? 'bg-green-500' : 
-                          stats.peopleInside < 80 ? 'bg-yellow-500' : 'bg-red-500'
+                        className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-500 ${
+                          stats.peopleInside < 50 ? 'bg-green-600' : 
+                          stats.peopleInside < 80 ? 'bg-yellow-600' : 'bg-red-600'
                         }`}
                       ></div>
                     </div>
@@ -255,22 +331,25 @@ export default function DashboardPage() {
             </div>
             
             {/* Registros de acceso recientes */}
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
-              <div className="px-4 py-5 sm:px-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">
+            <div className="bg-white shadow-lg overflow-hidden rounded-lg">
+              <div className="px-6 py-5 border-b border-gray-200">
+                <h3 className="text-lg leading-6 font-semibold text-gray-800 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
                   Registros de acceso recientes
                 </h3>
               </div>
               <ul className="divide-y divide-gray-200">
                 {stats.recentAccessLogs.length > 0 ? (
                   stats.recentAccessLogs.map((log) => (
-                    <li key={log.id} className="px-4 py-4 sm:px-6">
+                    <li key={log.id} className="px-6 py-4 hover:bg-gray-50 transition-colors duration-150">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-primary-600">
+                        <p className="text-sm font-medium text-gray-800">
                           {log.user_detail?.username || 'Visitante'}
                         </p>
                         <div className="ml-2 flex-shrink-0 flex">
-                          <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          <p className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                             log.status === 'granted' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                           }`}>
                             {log.status === 'granted' ? 'Acceso concedido' : 'Acceso denegado'}
@@ -280,6 +359,9 @@ export default function DashboardPage() {
                       <div className="mt-2 sm:flex sm:justify-between">
                         <div className="sm:flex">
                           <p className="flex items-center text-sm text-gray-500">
+                            <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
                             {log.access_point_detail?.name || 'Punto de acceso'}
                           </p>
                         </div>
@@ -295,8 +377,12 @@ export default function DashboardPage() {
                     </li>
                   ))
                 ) : (
-                  <li className="px-4 py-6 text-center text-gray-500">
-                    No hay registros de acceso recientes.
+                  <li className="px-6 py-8 text-center text-gray-500 bg-gray-50">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p className="mt-2 font-medium">No hay registros de acceso recientes.</p>
+                    <p className="mt-1 text-sm">Los registros aparecerán aquí cuando haya actividad.</p>
                   </li>
                 )}
               </ul>

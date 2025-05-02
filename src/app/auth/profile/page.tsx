@@ -145,8 +145,8 @@ export default function ProfilePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Mi Perfil</h1>
+      <div className="space-y-6 py-6 px-4 sm:px-6 lg:px-8">
+        <h1 className="text-2xl font-bold text-gray-800">Mi Perfil</h1>
 
         {error && (
           <Alert variant="error">
@@ -174,21 +174,21 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Información personal</h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">Actualiza tu información personal y de contacto.</p>
+          <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-800">Información personal</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-600">Actualiza tu información personal y de contacto.</p>
             </div>
-            <div className="border-t border-gray-200">
+            <div>
               <form onSubmit={handleSubmit} className="divide-y divide-gray-200">
-                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <label htmlFor="username" className="text-sm font-medium text-gray-500">Nombre de usuario</label>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 hover:bg-gray-50 transition-colors duration-150">
+                  <label htmlFor="username" className="text-sm font-medium text-gray-700">Nombre de usuario</label>
                   <div className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                     {user?.username}
                   </div>
                 </div>
-                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <label htmlFor="first_name" className="text-sm font-medium text-gray-500">Nombre</label>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 hover:bg-gray-50 transition-colors duration-150">
+                  <label htmlFor="first_name" className="text-sm font-medium text-gray-700">Nombre</label>
                   <div className="mt-1 sm:mt-0 sm:col-span-2">
                     <input
                       type="text"
@@ -196,12 +196,12 @@ export default function ProfilePage() {
                       id="first_name"
                       value={formData.first_name}
                       onChange={handleChange}
-                      className="max-w-lg block w-full shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:max-w-xs sm:text-sm border-gray-300 rounded-md"
+                      className="max-w-lg block w-full shadow-sm sm:max-w-xs sm:text-sm border border-gray-300 rounded-md p-2 bg-gray-100 text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
                     />
                   </div>
                 </div>
-                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <label htmlFor="last_name" className="text-sm font-medium text-gray-500">Apellido</label>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 hover:bg-gray-50 transition-colors duration-150">
+                  <label htmlFor="last_name" className="text-sm font-medium text-gray-700">Apellido</label>
                   <div className="mt-1 sm:mt-0 sm:col-span-2">
                     <input
                       type="text"
@@ -209,12 +209,12 @@ export default function ProfilePage() {
                       id="last_name"
                       value={formData.last_name}
                       onChange={handleChange}
-                      className="max-w-lg block w-full shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:max-w-xs sm:text-sm border-gray-300 rounded-md"
+                      className="max-w-lg block w-full shadow-sm sm:max-w-xs sm:text-sm border border-gray-300 rounded-md p-2 bg-gray-100 text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
                     />
                   </div>
                 </div>
-                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <label htmlFor="email" className="text-sm font-medium text-gray-500">Email</label>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 hover:bg-gray-50 transition-colors duration-150">
+                  <label htmlFor="email" className="text-sm font-medium text-gray-700">Email</label>
                   <div className="mt-1 sm:mt-0 sm:col-span-2">
                     <input
                       type="email"
@@ -222,12 +222,12 @@ export default function ProfilePage() {
                       id="email"
                       value={formData.email}
                       onChange={handleChange}
-                      className="max-w-lg block w-full shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:max-w-xs sm:text-sm border-gray-300 rounded-md"
+                      className="max-w-lg block w-full shadow-sm sm:max-w-xs sm:text-sm border border-gray-300 rounded-md p-2 bg-gray-100 text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
                     />
                   </div>
                 </div>
-                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <label htmlFor="phone" className="text-sm font-medium text-gray-500">Teléfono</label>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 hover:bg-gray-50 transition-colors duration-150">
+                  <label htmlFor="phone" className="text-sm font-medium text-gray-700">Teléfono</label>
                   <div className="mt-1 sm:mt-0 sm:col-span-2">
                     <input
                       type="tel"
@@ -235,25 +235,25 @@ export default function ProfilePage() {
                       id="phone"
                       value={formData.phone}
                       onChange={handleChange}
-                      className="max-w-lg block w-full shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:max-w-xs sm:text-sm border-gray-300 rounded-md"
+                      className="max-w-lg block w-full shadow-sm sm:max-w-xs sm:text-sm border border-gray-300 rounded-md p-2 bg-gray-100 text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
                     />
                   </div>
                 </div>
-                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <label htmlFor="role" className="text-sm font-medium text-gray-500">Rol</label>
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 hover:bg-gray-50 transition-colors duration-150">
+                  <label htmlFor="role" className="text-sm font-medium text-gray-700">Rol</label>
                   <div className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                     {user?.role?.name || 'Usuario'}
                   </div>
                 </div>
 
-                <div className="px-4 py-3 bg-gray-50 text-right sm:px-6">
-                  <Button
+                <div className="px-4 py-4 sm:px-6 bg-gray-50 text-right">
+                  <button
                     type="submit"
-                    isLoading={updating}
                     disabled={updating}
+                    className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-300 transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     {updating ? 'Guardando...' : 'Guardar'}
-                  </Button>
+                  </button>
                 </div>
               </form>
             </div>
