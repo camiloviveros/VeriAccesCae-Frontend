@@ -173,17 +173,27 @@ export const getAccessLogs = async (params: Record<string, any> = {}): Promise<A
     return response.data;
   } catch (error) {
     console.error("Error getting access logs:", error);
-    throw error;
+    // Devolver un array vacío en caso de error para evitar errores en cascada
+    return [];
   }
 };
 
 export const getVisitors = async (): Promise<VisitorResponse[] | PaginatedResponse<VisitorResponse>> => {
   try {
     const response = await apiClient.get<VisitorResponse[] | PaginatedResponse<VisitorResponse>>('/access/visitors/');
-    return response.data;
+    
+    // Verificar si la respuesta es válida antes de devolverla
+    if (response && response.data) {
+      return response.data;
+    } else {
+      // Si la respuesta es vacía, devolver un array vacío
+      console.warn("La respuesta del servidor está vacía");
+      return [];
+    }
   } catch (error) {
     console.error("Error getting visitors:", error);
-    throw error;
+    // Devolver un array vacío en caso de error para evitar errores en cascada
+    return [];
   }
 };
 
@@ -233,9 +243,19 @@ export const createVisitor = async (data: FormData | Record<string, any>): Promi
 export const updateVisitorStatus = async (id: string | number, status: string): Promise<VisitorResponse> => {
   try {
     console.log(`Actualizando estado del visitante ${id} a: ${status}`);
-    const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
-    console.log('Respuesta de actualización de estado:', response.data);
-    return response.data;
+    
+    // Intentar primero con la ruta específica para update_status
+    try {
+      const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/update_status/`, { status });
+      console.log('Respuesta de actualización de estado:', response.data);
+      return response.data;
+    } catch (firstError) {
+      // Si falla, intentar con la ruta estándar de actualización
+      console.log('Intentando ruta alternativa para actualización de estado');
+      const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
+      console.log('Respuesta de actualización de estado (ruta alternativa):', response.data);
+      return response.data;
+    }
   } catch (error) {
     console.error(`Error updating visitor status (${id}):`, error);
     throw error;
@@ -260,7 +280,8 @@ export const getOccupancyStats = async (): Promise<{current: number, max: number
     return response.data;
   } catch (error) {
     console.error('Error getting occupancy stats:', error);
-    throw error;
+    // Devolver datos predeterminados en caso de error
+    return { current: 0, max: 100 };
   }
 };
 

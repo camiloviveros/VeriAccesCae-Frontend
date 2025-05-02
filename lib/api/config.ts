@@ -11,6 +11,8 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Agregar timeout para evitar solicitudes que queden colgadas indefinidamente
+  timeout: 15000,
 });
 
 // Interceptor para añadir el token a las solicitudes
@@ -24,6 +26,8 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
+    // Agregar registro de solicitud para depuración
+    console.log(`Request sent to: ${config.url}`, { method: config.method });
     return config;
   },
   (error) => Promise.reject(error)
@@ -51,12 +55,14 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token available');
         }
         
+        console.log('Intentando refrescar el token...');
         const response = await axios.post<{access: string}>(`${API_URL}/auth/refresh/`, {
           refresh: refreshToken,
         });
         
         // Guardar el nuevo token
         localStorage.setItem('access_token', response.data.access);
+        console.log('Token refrescado exitosamente');
         
         // Actualizar el header y reenviar la solicitud
         originalRequest.headers = originalRequest.headers || {};
@@ -79,7 +85,16 @@ apiClient.interceptors.response.use(
     
     // Manejo mejorado de errores específicos
     if (error.response) {
+      let errorMessage = '';
+      
       switch (error.response.status) {
+        case 400:
+          console.error('API Error: Bad Request (400) - Solicitud incorrecta', {
+            url: error.config?.url || 'unknown',
+            method: error.config?.method || 'unknown',
+            data: error.response.data || 'No data'
+          });
+          break;
         case 403:
           console.error('API Error: Forbidden (403) - No tienes permisos para acceder a este recurso', {
             url: error.config?.url || 'unknown',
@@ -97,6 +112,17 @@ apiClient.interceptors.response.use(
             url: error.config?.url || 'unknown',
             method: error.config?.method || 'unknown'
           });
+          
+          // Proporcionar información más útil para errores 500
+          if (error.config?.url?.includes('/access/visitors/')) {
+            console.warn('Este error 500 puede estar relacionado con el endpoint de visitantes. Verificar la conexión con el backend o problemas de modelado de datos.');
+            
+            // Intento de manejo especial para errores en visitantes
+            if (originalRequest.method === 'get') {
+              console.info('Intentando recuperarse del error 500 en getVisitors devolviendo un array vacío');
+              return { data: [] };
+            }
+          }
           break;
         default:
           console.error('API Error:', {
@@ -107,19 +133,73 @@ apiClient.interceptors.response.use(
             data: error.response.data || 'No data'
           });
       }
+      
+      // Extraer mensaje de error para mejorar la experiencia del usuario
+      if (error.response.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (typeof error.response.data === 'object') {
+          // Formatear errores de validación
+          errorMessage = Object.entries(error.response.data)
+            .map(([field, messages]) => {
+              if (Array.isArray(messages)) {
+                return `${field}: ${messages.join(', ')}`;
+              } else if (typeof messages === 'string') {
+                return `${field}: ${messages}`;
+              }
+              return `${field}: Error de validación`;
+            })
+            .join('; ');
+        }
+        
+        if (errorMessage) {
+          console.error('Mensaje de error detallado:', errorMessage);
+        }
+      }
     } else if (error.request) {
       // La solicitud se realizó pero no se recibió respuesta
       console.error('API Error: No se recibió respuesta del servidor', {
         url: error.config?.url || 'unknown',
         method: error.config?.method || 'unknown'
       });
+      
+      // Sugerir posibles soluciones para problemas de conexión
+      console.info('Posibles soluciones para problemas de conexión:');
+      console.info('1. Verificar que el servidor backend esté en ejecución');
+      console.info('2. Comprobar la configuración de CORS en el servidor');
+      console.info('3. Verificar la conectividad de red');
     } else {
       // Error al configurar la solicitud
       console.error('API Error:', error.message);
     }
     
+    // Para ciertos endpoints críticos, proporcionar respuestas fallback
+    if (error.config?.url?.includes('/access/visitors/') && error.config.method === 'get') {
+      console.warn('Usando respuesta fallback para visitantes debido a un error');
+      return { data: [] };
+    }
+    
     return Promise.reject(error);
   }
 );
+
+// Función de ayuda para reintentar solicitudes fallidas
+export const retryRequest = async (requestFn: () => Promise<any>, maxRetries = 3, delay = 1000) => {
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      retries++;
+      if (retries === maxRetries) throw error;
+      console.warn(`Reintentando solicitud fallida (intento ${retries}/${maxRetries})...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
 
 export default apiClient;

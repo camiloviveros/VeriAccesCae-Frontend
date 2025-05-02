@@ -1,3 +1,4 @@
+// src/app/access/control/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -30,7 +31,7 @@ const parseVisitorStatus = (status?: string): 'pending' | 'inside' | 'outside' |
   if (status === 'pending' || status === 'inside' || status === 'outside' || status === 'denied') {
     return status as 'pending' | 'inside' | 'outside' | 'denied';
   }
-  return undefined;
+  return 'pending'; // Valor por defecto en vez de undefined
 };
 
 const ensureVisitor = (visitor: any): Visitor => {
@@ -83,9 +84,6 @@ export default function AccessControlPage() {
       setVisitors(visitorsList);
       const insideVisitors = visitorsList.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
-      
-      // No modificar el contador de aforo con los visitantes
-      // El contador de aforo es independiente y solo para residentes
     } catch (err) {
       console.error('Error fetching visitors:', err);
       setError('No se pudieron cargar los visitantes');
@@ -96,9 +94,6 @@ export default function AccessControlPage() {
 
   const handleAllowAccess = async (visitor: Visitor) => {
     try {
-      // No verificamos el aforo máximo para visitantes
-      // ya que los visitantes no afectan el contador de aforo
-      
       // Actualizar el visitante en el backend
       await accessService.updateVisitorStatus(visitor.id, 'inside');
       
@@ -196,28 +191,6 @@ export default function AccessControlPage() {
     }
   };
 
-  const handleAddPersonToOccupancy = () => {
-    if (occupancyCount < maxOccupancy) {
-      const newCount = occupancyCount + 1;
-      setOccupancyCount(newCount);
-      
-      // Guardar el contador en localStorage
-      localStorage.setItem('occupancyCount', newCount.toString());
-    } else {
-      setError(`No se puede agregar más personas. El edificio ha alcanzado su capacidad máxima (${maxOccupancy} personas).`);
-    }
-  };
-
-  const handleRemovePersonFromOccupancy = () => {
-    if (occupancyCount > 0) {
-      const newCount = occupancyCount - 1;
-      setOccupancyCount(newCount);
-      
-      // Guardar el contador en localStorage
-      localStorage.setItem('occupancyCount', newCount.toString());
-    }
-  };
-
   const getStatusBadge = (status?: string) => {
     switch(status) {
       case 'inside':
@@ -284,24 +257,7 @@ export default function AccessControlPage() {
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Control de Aforo</h3>
             <div className="mt-2 max-w-xl text-sm text-gray-500">
-              <p>Personas (residentes) dentro del edificio: {occupancyCount}/{maxOccupancy}</p>
-            </div>
-            <div className="mt-5">
-              <div className="flex space-x-3">
-                <Button
-                  onClick={handleAddPersonToOccupancy}
-                  disabled={occupancyCount >= maxOccupancy}
-                >
-                  Agregar Persona
-                </Button>
-                <Button 
-                  variant="secondary"
-                  onClick={handleRemovePersonFromOccupancy}
-                  disabled={occupancyCount <= 0}
-                >
-                  Remover Persona
-                </Button>
-              </div>
+              <p>Personas dentro del edificio: {occupancyCount}/{maxOccupancy}</p>
             </div>
           </div>
         </div>

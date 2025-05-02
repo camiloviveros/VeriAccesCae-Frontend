@@ -1,16 +1,17 @@
+// src/app/access/visitors/new/regular/page.tsx
 'use client';
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../../../lib/api'; // Actualizar la ruta de importación
+import { accessService } from '../../../../../../lib/api';
 import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
 import { Button } from '../../../../../../components/ui/Button';
 
 interface FormData {
   first_name: string;
   last_name: string;
-  id_number: string; // Añadimos este campo que faltaba
+  id_number: string;
   phone: string;
   apartment_number: string;
   visitor_type: string;
@@ -20,7 +21,7 @@ export default function NewRegularVisitorPage() {
   const [formData, setFormData] = useState<FormData>({
     first_name: '',
     last_name: '',
-    id_number: '', // Inicializamos este campo
+    id_number: '',
     phone: '',
     apartment_number: '',
     visitor_type: 'regular'
@@ -136,7 +137,6 @@ export default function NewRegularVisitorPage() {
                   </div>
                 </div>
 
-                {/* Añadimos el campo id_number que faltaba */}
                 <div className="sm:col-span-3">
                   <label htmlFor="id_number" className="block text-sm font-medium text-gray-700">
                     Número de Identificación
