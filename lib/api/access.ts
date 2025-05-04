@@ -297,8 +297,14 @@ export const deleteVisitor = async (id: string | number): Promise<void> => {
   try {
     console.log(`Intentando eliminar visitante con ID: ${id}`);
     
-    // Enviar solicitud DELETE al backend
-    const response = await apiClient.delete(`/access/visitors/${id}/`);
+    // Convertir el id a string para asegurar que se envía en el formato correcto
+    const idToDelete = id.toString();
+    
+    // Enviar solicitud DELETE al backend con un timeout más largo
+    const response = await apiClient.delete(`/access/visitors/${idToDelete}/`, {
+      timeout: 15000 // Aumentar el timeout a 15 segundos
+    });
+    
     console.log(`Respuesta del backend al eliminar visitante ${id}:`, response.status);
     
     // Notificar a otros componentes sobre la eliminación exitosa

@@ -12,7 +12,7 @@ export const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
   // Agregar timeout para evitar solicitudes que queden colgadas indefinidamente
-  timeout: 15000,
+  timeout: 30000, // Aumentado a 30 segundos para operaciones más lentas
 });
 
 // Interceptor para añadir el token a las solicitudes
@@ -27,7 +27,11 @@ apiClient.interceptors.request.use(
       }
     }
     // Agregar registro de solicitud para depuración
-    console.log(`Request sent to: ${config.url}`, { method: config.method });
+    console.log(`Request sent to: ${config.url}`, { 
+      method: config.method,
+      data: config.data,
+      params: config.params
+    });
     return config;
   },
   (error) => Promise.reject(error)
@@ -35,12 +39,34 @@ apiClient.interceptors.request.use(
 
 // Interceptor para manejar errores de token expirado
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Log de respuesta exitosa para depuración
+    console.log(`Response from ${response.config.url}:`, {
+      status: response.status,
+      statusText: response.statusText
+    });
+    return response;
+  },
   async (error) => {
     // Verificar si error.config está definido
     const originalRequest = error.config 
       ? { ...error.config, _retry: error.config._retry || false } 
       : { _retry: false, url: null };
+    
+    // Log detallado del error para depuración
+    console.error('API Error:', {
+      request: {
+        url: originalRequest.url,
+        method: originalRequest.method,
+        data: originalRequest.data
+      },
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      } : 'No response',
+      message: error.message
+    });
     
     // Si el error es 401 y no es un reintento y no es un intento de login
     if (error.response?.status === 401 && !originalRequest._retry && 

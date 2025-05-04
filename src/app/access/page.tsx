@@ -62,6 +62,15 @@ export default function AccessControlPage() {
     if (storedCount) {
       setOccupancyCount(parseInt(storedCount, 10));
     }
+    
+    // Configurar eventos para actualizar la lista cuando cambie el estado
+    window.addEventListener('visitorStatusChanged', fetchVisitors);
+    window.addEventListener('visitorDeleted', fetchVisitors);
+    
+    return () => {
+      window.removeEventListener('visitorStatusChanged', fetchVisitors);
+      window.removeEventListener('visitorDeleted', fetchVisitors);
+    };
   }, []);
 
   const fetchVisitors = async () => {
@@ -106,7 +115,7 @@ export default function AccessControlPage() {
       }
       
       // Actualizar el visitante en el backend
-      await accessService.updateVisitorStatus(visitor.id, 'inside');
+      await accessService.updateVisitorStatus(visitor.id.toString(), 'inside');
       
       // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
       const updatedVisitors = visitors.map(v => 
@@ -123,6 +132,9 @@ export default function AccessControlPage() {
       
       setSuccessMessage(`Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // Disparar evento para actualizar otras partes
+      window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
       console.error('Error allowing access:', err);
       setError('Error al permitir acceso');
@@ -132,7 +144,7 @@ export default function AccessControlPage() {
   const handleDenyAccess = async (visitor: Visitor) => {
     try {
       // Actualizar el visitante en el backend
-      await accessService.updateVisitorStatus(visitor.id, 'denied');
+      await accessService.updateVisitorStatus(visitor.id.toString(), 'denied');
       
       // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
       const updatedVisitors = visitors.map(v => 
@@ -142,6 +154,9 @@ export default function AccessControlPage() {
       
       setSuccessMessage(`Acceso denegado a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // Disparar evento para actualizar otras partes
+      window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
       console.error('Error denying access:', err);
       setError('Error al denegar acceso');
@@ -151,7 +166,7 @@ export default function AccessControlPage() {
   const handleExitBuilding = async (visitor: Visitor) => {
     try {
       // Actualizar el visitante en el backend
-      await accessService.updateVisitorStatus(visitor.id, 'outside');
+      await accessService.updateVisitorStatus(visitor.id.toString(), 'outside');
       
       // Actualizar en el estado local - usar as const para asegurar que el tipo es correcto
       const updatedVisitors = visitors.map(v => 
@@ -168,6 +183,9 @@ export default function AccessControlPage() {
       
       setSuccessMessage(`Salida registrada para ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // Disparar evento para actualizar otras partes
+      window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
       console.error('Error registering exit:', err);
       setError('Error al registrar salida');
@@ -175,18 +193,24 @@ export default function AccessControlPage() {
   };
 
   const handleDeleteVisitor = (visitor: Visitor) => {
+    console.log('Preparando para eliminar visitante:', visitor);
     setSelectedVisitor(visitor);
     setShowDeleteModal(true);
   };
 
   const confirmDeleteVisitor = async () => {
-    if (!selectedVisitor) return;
+    if (!selectedVisitor) {
+      console.error('No hay visitante seleccionado para eliminar');
+      return;
+    }
     
     try {
       setIsDeletingVisitor(true);
+      console.log('Iniciando eliminación del visitante ID:', selectedVisitor.id);
       
-      // Eliminar visitante del backend
-      await accessService.deleteVisitor(selectedVisitor.id);
+      // Eliminar visitante del backend - convertir el ID a string
+      await accessService.deleteVisitor(selectedVisitor.id.toString());
+      console.log('Visitante eliminado exitosamente en el backend');
       
       // Actualizar en el estado local
       const updatedVisitors = visitors.filter(v => v.id !== selectedVisitor.id);
@@ -201,13 +225,20 @@ export default function AccessControlPage() {
         localStorage.setItem('occupancyCount', insideVisitors.length.toString());
       }
       
-      setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado`);
+      setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado correctamente`);
       setShowDeleteModal(false);
       setSelectedVisitor(null);
+      
+      // Disparar evento para actualizar otras partes de la aplicación
+      window.dispatchEvent(new Event('visitorDeleted'));
+      
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // Recargar la lista de visitantes después de eliminar
+      fetchVisitors();
     } catch (err) {
-      console.error('Error deleting visitor:', err);
-      setError('Error al eliminar visitante');
+      console.error('Error completo al eliminar visitante:', err);
+      setError('Error al eliminar el visitante. Por favor, intente nuevamente.');
     } finally {
       setIsDeletingVisitor(false);
     }
@@ -251,12 +282,21 @@ export default function AccessControlPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-semibold text-gray-900">Control de Acceso</h1>
-          <Link 
-            href="/access/control/occupancy" 
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            Control de Aforo
-          </Link>
+          <div className="flex space-x-2">
+            <Button 
+              onClick={fetchVisitors}
+              variant="outline"
+              size="sm"
+            >
+              Actualizar
+            </Button>
+            <Link 
+              href="/access/control/occupancy" 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Control de Aforo
+            </Link>
+          </div>
         </div>
 
         {error && (
@@ -376,6 +416,7 @@ export default function AccessControlPage() {
                         onClick={() => handleDeleteVisitor(visitor)}
                         variant="outline"
                         size="sm"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
                       >
                         🗑️ Eliminar
                       </Button>

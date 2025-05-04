@@ -122,8 +122,8 @@ export default function AccessControlPage() {
       setIsDeletingVisitor(true);
       console.log('Iniciando eliminación del visitante ID:', selectedVisitor.id);
       
-      // Eliminar visitante del backend
-      await accessService.deleteVisitor(selectedVisitor.id);
+      // Eliminar visitante del backend - convertir el ID a string
+      await accessService.deleteVisitor(selectedVisitor.id.toString());
       console.log('Visitante eliminado exitosamente en el backend');
       
       // Actualizar estado local
@@ -143,6 +143,9 @@ export default function AccessControlPage() {
       window.dispatchEvent(new Event('visitorDeleted'));
       
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // Recargar la lista de visitantes después de eliminar
+      fetchVisitors();
     } catch (err) {
       console.error('Error completo al eliminar visitante:', err);
       setError('Error al eliminar el visitante. Por favor, intente nuevamente.');
