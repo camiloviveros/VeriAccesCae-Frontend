@@ -1,4 +1,5 @@
-// src/app/access/control/page.tsx (versión mejorada)
+// src/app/access/control/page.tsx (versión corregida)
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -27,18 +28,18 @@ interface Visitor {
   status?: 'pending' | 'inside' | 'outside' | 'denied';
 }
 
-const parseVisitorStatus = (status?: string): 'pending' | 'inside' | 'outside' | 'denied' | undefined => {
+const parseVisitorStatus = (status?: string): 'pending' | 'inside' | 'outside' | 'denied' => {
   if (status === 'pending' || status === 'inside' || status === 'outside' || status === 'denied') {
-    return status as 'pending' | 'inside' | 'outside' | 'denied';
+    return status;
   }
-  return 'pending'; // Default value instead of undefined
+  return 'pending'; // Valor por defecto
 };
 
 const ensureVisitor = (visitor: any): Visitor => {
   const status = parseVisitorStatus(visitor.status);
   return {
     ...visitor,
-    status: status || 'pending'
+    status
   };
 };
 
@@ -58,35 +59,21 @@ export default function AccessControlPage() {
   useEffect(() => {
     fetchVisitors();
     
-    // Load occupancy counter from localStorage
+    // Cargar el contador de aforo del localStorage
     const storedCount = localStorage.getItem('occupancyCount');
     if (storedCount) {
       setOccupancyCount(parseInt(storedCount, 10));
     }
     
-    // Set up timer to check for expiring temporary visitors
-    const checkExpiringVisitors = () => {
-      const now = new Date();
-      // Find visitors whose exit time is within 15 minutes
-      const expiringVisitors = visitors.filter(visitor => 
-        visitor.visitor_type === 'temporary' && 
-        visitor.status === 'inside' && 
-        visitor.exit_date && 
-        new Date(visitor.exit_date) > now &&
-        new Date(visitor.exit_date).getTime() - now.getTime() < 15 * 60 * 1000 // 15 minutes
-      );
-      
-      if (expiringVisitors.length > 0) {
-        setError('Alerta: Hay visitantes temporales cuyo tiempo de visita está por expirar en los próximos 15 minutos.');
-      }
-    };
-    
-    const intervalId = setInterval(checkExpiringVisitors, 60000); // Check every minute
+    // Configurar eventos para actualizar la lista cuando cambie el estado
+    window.addEventListener('visitorStatusChanged', fetchVisitors);
+    window.addEventListener('visitorDeleted', fetchVisitors);
     
     return () => {
-      clearInterval(intervalId);
+      window.removeEventListener('visitorStatusChanged', fetchVisitors);
+      window.removeEventListener('visitorDeleted', fetchVisitors);
     };
-  }, [visitors]);
+  }, []);
 
   const fetchVisitors = async () => {
     try {
@@ -100,27 +87,15 @@ export default function AccessControlPage() {
         visitorsList = response.results.map(ensureVisitor);
       } else if (response && typeof response === 'object') {
         visitorsList = Object.values(response)
-          .filter(val => typeof val === 'object' && val !== null && 'id' in val && 'first_name' in val && 'last_name' in val)
+          .filter(val => 
+            typeof val === 'object' && val !== null && 'id' in val && 'first_name' in val && 'last_name' in val
+          )
           .map(ensureVisitor);
       }
       
       setVisitors(visitorsList);
       const insideVisitors = visitorsList.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
-      
-      // Check for expired visitors
-      const now = new Date();
-      const timeExpiredVisitors = visitorsList.filter(visitor => 
-        visitor.visitor_type === 'temporary' && 
-        visitor.status === 'inside' && 
-        visitor.exit_date && 
-        new Date(visitor.exit_date) < now
-      );
-      
-      if (timeExpiredVisitors.length > 0) {
-        const expiredNames = timeExpiredVisitors.map(v => `${v.first_name} ${v.last_name}`).join(', ');
-        setError(`🔔 Tiempo cumplido para: ${expiredNames} - Reportar salida en el control de acceso`);
-      }
     } catch (err) {
       console.error('Error fetching visitors:', err);
       setError('No se pudieron cargar los visitantes');
@@ -129,17 +104,58 @@ export default function AccessControlPage() {
     }
   };
 
-  const handleAllowAccess = async (visitor: Visitor) => {
+  // Función para manejar la eliminación de visitantes
+  const handleDeleteVisitor = (visitor: Visitor) => {
+    console.log('Preparando eliminación de visitante:', visitor);
+    setSelectedVisitor(visitor);
+    setShowDeleteModal(true);
+  };
+
+  // Función para confirmar la eliminación del visitante
+  const confirmDeleteVisitor = async () => {
+    if (!selectedVisitor) {
+      console.error('No hay visitante seleccionado para eliminar');
+      return;
+    }
+    
     try {
-      if (occupancyCount >= maxOccupancy) {
-        setError(`No se puede permitir el acceso. El edificio ha alcanzado su capacidad máxima (${maxOccupancy} personas).`);
-        return;
+      setIsDeletingVisitor(true);
+      console.log('Iniciando eliminación del visitante ID:', selectedVisitor.id);
+      
+      // Eliminar visitante del backend
+      await accessService.deleteVisitor(selectedVisitor.id);
+      console.log('Visitante eliminado exitosamente en el backend');
+      
+      // Actualizar estado local
+      setVisitors(prevVisitors => prevVisitors.filter(v => v.id !== selectedVisitor.id));
+      console.log('Estado local actualizado - visitante eliminado de la lista');
+      
+      // Actualizar visitantes dentro si es necesario
+      if (selectedVisitor.status === 'inside') {
+        setPeopleInside(prevInside => prevInside.filter(v => v.id !== selectedVisitor.id));
       }
       
-      // Update visitor in backend
+      setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado correctamente`);
+      setShowDeleteModal(false);
+      setSelectedVisitor(null);
+      
+      // Disparar evento para actualizar otras partes de la aplicación
+      window.dispatchEvent(new Event('visitorDeleted'));
+      
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      console.error('Error completo al eliminar visitante:', err);
+      setError('Error al eliminar el visitante. Por favor, intente nuevamente.');
+    } finally {
+      setIsDeletingVisitor(false);
+    }
+  };
+
+  const handleAllowAccess = async (visitor: Visitor) => {
+    try {
       await accessService.updateVisitorStatus(visitor.id, 'inside');
       
-      // Update in local state - use as const to ensure correct type
+      // Actualizar listas locales
       const updatedVisitors = visitors.map(v => 
         v.id === visitor.id ? {...v, status: 'inside' as const} : v
       );
@@ -148,18 +164,11 @@ export default function AccessControlPage() {
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       
-      // If it's a temporary visitor, log entry time
-      if (visitor.visitor_type === 'temporary') {
-        const entryDate = new Date();
-        // This would normally update entry_date in the backend, but we're just updating UI for now
-        console.log(`Visitor ${visitor.id} entered at ${entryDate.toISOString()}`);
-      }
-      
-      // Actualizar el localStorage para que el dashboard se actualice
-      updateDashboardCounts(insideVisitors.length);
-      
       setSuccessMessage(`Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // Disparar evento para actualizar otras vistas
+      window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
       console.error('Error allowing access:', err);
       setError('Error al permitir acceso');
@@ -168,24 +177,17 @@ export default function AccessControlPage() {
 
   const handleDenyAccess = async (visitor: Visitor) => {
     try {
-      // Update visitor in backend
       await accessService.updateVisitorStatus(visitor.id, 'denied');
       
-      // Update in local state - use as const to ensure correct type
       const updatedVisitors = visitors.map(v => 
         v.id === visitor.id ? {...v, status: 'denied' as const} : v
       );
       setVisitors(updatedVisitors);
       
-      // Actualizar las personas dentro si el visitante estaba dentro
-      if (visitor.status === 'inside') {
-        const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
-        setPeopleInside(insideVisitors);
-        updateDashboardCounts(insideVisitors.length);
-      }
-      
       setSuccessMessage(`Acceso denegado a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
       console.error('Error denying access:', err);
       setError('Error al denegar acceso');
@@ -194,10 +196,8 @@ export default function AccessControlPage() {
 
   const handleExitBuilding = async (visitor: Visitor) => {
     try {
-      // Update visitor in backend
       await accessService.updateVisitorStatus(visitor.id, 'outside');
       
-      // Update in local state - use as const to ensure correct type
       const updatedVisitors = visitors.map(v => 
         v.id === visitor.id ? {...v, status: 'outside' as const} : v
       );
@@ -206,82 +206,13 @@ export default function AccessControlPage() {
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       
-      // Actualizar el localStorage para que el dashboard se actualice
-      updateDashboardCounts(insideVisitors.length);
-      
-      // If it's a temporary visitor, log exit time
-      if (visitor.visitor_type === 'temporary') {
-        const exitDate = new Date();
-        // This would normally update exit_date in the backend, but we're just updating UI for now
-        console.log(`Visitor ${visitor.id} exited at ${exitDate.toISOString()}`);
-      }
-      
       setSuccessMessage(`Salida registrada para ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
+      
+      window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
       console.error('Error registering exit:', err);
       setError('Error al registrar salida');
-    }
-  };
-
-  const handleDeleteVisitor = (visitor: Visitor) => {
-    setSelectedVisitor(visitor);
-    setShowDeleteModal(true);
-  };
-
-  const confirmDeleteVisitor = async () => {
-    if (!selectedVisitor) return;
-    
-    try {
-      setIsDeletingVisitor(true);
-      
-      // Delete visitor from backend
-      await accessService.deleteVisitor(selectedVisitor.id);
-      
-      // Update in local state
-      const updatedVisitors = visitors.filter(v => v.id !== selectedVisitor.id);
-      setVisitors(updatedVisitors);
-      
-      // Update the list of people inside (only if visitor was inside)
-      if (selectedVisitor.status === 'inside') {
-        const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
-        setPeopleInside(insideVisitors);
-        
-        // Actualizar el localStorage para que el dashboard se actualice
-        updateDashboardCounts(insideVisitors.length);
-      }
-      
-      setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado`);
-      setShowDeleteModal(false);
-      setSelectedVisitor(null);
-      
-      // Trigger event to update the dashboard
-      window.dispatchEvent(new Event('visitorDeleted'));
-      
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      console.error('Error deleting visitor:', err);
-      setError('Error al eliminar visitante');
-    } finally {
-      setIsDeletingVisitor(false);
-    }
-  };
-
-  // Función para actualizar los contadores del dashboard
-  const updateDashboardCounts = (insideCount: number) => {
-    // Actualizar localStorage y disparar un evento de storage para que el dashboard lo detecte
-    localStorage.setItem('visitorsInside', insideCount.toString());
-    
-    // Disparar un evento personalizado para que otras partes de la aplicación sepan que hubo cambios
-    window.dispatchEvent(new Event('visitorStatusChanged'));
-    
-    // Si estamos en el navegador, usar el método de Storage Event
-    if (typeof window !== 'undefined') {
-      // Crear un evento storage para que otras pestañas sepan que hubo cambios
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'visitorsInside',
-        newValue: insideCount.toString()
-      }));
     }
   };
 
@@ -298,31 +229,6 @@ export default function AccessControlPage() {
     }
   };
 
-  const getRemainingTime = (exitDate?: string) => {
-    if (!exitDate) return null;
-    
-    const exitTime = new Date(exitDate);
-    const now = new Date();
-    
-    // If already expired
-    if (exitTime < now) {
-      return <span className="text-red-600 font-medium">Tiempo expirado</span>;
-    }
-    
-    const diffMs = exitTime.getTime() - now.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    
-    if (diffMins < 15) {
-      return <span className="text-red-600 font-medium">Menos de 15 minutos</span>;
-    } else if (diffMins < 60) {
-      return <span className="text-yellow-600">{diffMins} minutos</span>;
-    } else {
-      const hours = Math.floor(diffMins / 60);
-      const mins = diffMins % 60;
-      return <span>{hours}h {mins}m</span>;
-    }
-  };
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -330,7 +236,7 @@ export default function AccessControlPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Control de Acceso</h1>
           <div className="flex space-x-2">
             <Button 
-              onClick={() => fetchVisitors()}
+              onClick={fetchVisitors}
               variant="outline"
               size="sm"
             >
@@ -385,7 +291,7 @@ export default function AccessControlPage() {
           ) : visitors.length > 0 ? (
             <ul className="divide-y divide-gray-200">
               {visitors.map((visitor) => (
-                <li key={visitor.id} className="px-4 py-4 sm:px-6">
+                <li key={visitor.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-gray-100">
@@ -420,18 +326,6 @@ export default function AccessControlPage() {
                           {visitor.company && <p>Empresa: {visitor.company}</p>}
                           {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
                           {visitor.phone && <p>Teléfono: {visitor.phone}</p>}
-                          {visitor.entry_date && visitor.exit_date && (
-                            <div>
-                              <p>
-                                Visita: {new Date(visitor.entry_date).toLocaleString()} - {new Date(visitor.exit_date).toLocaleString()}
-                              </p>
-                              {visitor.status === 'inside' && (
-                                <p className="text-xs mt-1">
-                                  Tiempo restante: {getRemainingTime(visitor.exit_date)}
-                                </p>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -469,6 +363,8 @@ export default function AccessControlPage() {
                         onClick={() => handleDeleteVisitor(visitor)}
                         variant="outline"
                         size="sm"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
+                        data-visitor-id={visitor.id}
                       >
                         🗑️ Eliminar
                       </Button>
@@ -484,6 +380,7 @@ export default function AccessControlPage() {
           )}
         </div>
 
+        {/* Sección de personas dentro */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
           <div className="px-4 py-5 sm:px-6">
             <h2 className="text-lg font-medium text-gray-900">Personas Actualmente Dentro</h2>
@@ -499,7 +396,7 @@ export default function AccessControlPage() {
           ) : peopleInside.length > 0 ? (
             <ul className="divide-y divide-gray-200">
               {peopleInside.map((visitor) => (
-                <li key={visitor.id} className="px-4 py-4 sm:px-6">
+                <li key={visitor.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10 rounded-full overflow-hidden bg-gray-100">
@@ -529,14 +426,6 @@ export default function AccessControlPage() {
                         <div className="text-sm text-gray-500">
                           <p>{visitor.visitor_type || (visitor.company ? 'Empresa' : visitor.entry_date ? 'Temporal' : 'Normal')}</p>
                           {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
-                          {visitor.entry_date && visitor.exit_date && (
-                            <div>
-                              <p>Visita hasta: {new Date(visitor.exit_date).toLocaleString()}</p>
-                              <p className="text-xs mt-1">
-                                Tiempo restante: {getRemainingTime(visitor.exit_date)}
-                              </p>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -559,6 +448,7 @@ export default function AccessControlPage() {
         </div>
       </div>
 
+      {/* Modal de confirmación para eliminación */}
       <Modal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}

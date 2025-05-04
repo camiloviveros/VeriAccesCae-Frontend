@@ -295,26 +295,69 @@ export const updateVisitorStatus = async (id: string | number, status: string): 
 
 export const deleteVisitor = async (id: string | number): Promise<void> => {
   try {
-    console.log(`Eliminando visitante ${id}`);
-    await apiClient.delete(`/access/visitors/${id}/`);
-    console.log(`Visitante ${id} eliminado correctamente`);
+    console.log(`Intentando eliminar visitante con ID: ${id}`);
     
-    // Disparar un evento para que el dashboard se actualice
+    // Enviar solicitud DELETE al backend
+    const response = await apiClient.delete(`/access/visitors/${id}/`);
+    console.log(`Respuesta del backend al eliminar visitante ${id}:`, response.status);
+    
+    // Notificar a otros componentes sobre la eliminación exitosa
     if (typeof window !== 'undefined') {
+      console.log(`Disparando evento visitorDeleted para el visitante ${id}`);
       window.dispatchEvent(new Event('visitorDeleted'));
+      
+      // Actualizar cualquier contador en localStorage si es necesario
+      const visitorInsideCount = localStorage.getItem('visitorsInside');
+      if (visitorInsideCount) {
+        const currentCount = parseInt(visitorInsideCount, 10);
+        if (!isNaN(currentCount) && currentCount > 0) {
+          localStorage.setItem('visitorsInside', (currentCount - 1).toString());
+        }
+      }
     }
   } catch (error: unknown) {
-    console.error(`Error deleting visitor (${id}):`, error);
+    console.error(`Error detallado al eliminar visitante (${id}):`, error);
     
-    // Crear mensaje de error más específico
-    const err = error as any; // Usamos 'any' para evitar errores de TypeScript
+    // Analizar el error para proporcionar información útil
+    const err = error as any;
+    
+    // Si es un error 404, simplemente registrarlo pero no lanzar excepción
+    // (el visitante ya podría haber sido eliminado)
     if (err?.response?.status === 404) {
-      throw new Error(`Visitante con ID ${id} no encontrado o ya fue eliminado`);
-    } else if (err?.response?.status === 500) {
-      throw new Error(`Error al eliminar visitante: Problema en el servidor`);
+      console.warn(`Visitante con ID ${id} no encontrado o ya fue eliminado`);
+      // Aún así disparamos el evento para actualizar la UI
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('visitorDeleted'));
+      }
+      return; // No lanzamos excepción
     }
     
-    throw error;
+    // Para errores reales, preparar un mensaje detallado
+    let errorMessage = `Error al eliminar visitante ${id}`;
+    
+    if (err?.response?.status === 403) {
+      errorMessage = 'No tiene permisos para eliminar este visitante';
+    } else if (err?.response?.status === 500) {
+      errorMessage = 'Error del servidor al intentar eliminar el visitante';
+    } else if (err?.response?.data) {
+      if (typeof err.response.data === 'string') {
+        errorMessage = err.response.data;
+      } else if (typeof err.response.data === 'object') {
+        errorMessage = JSON.stringify(err.response.data);
+      }
+    } else if (err?.message) {
+      errorMessage = err.message;
+    }
+    
+    // Crear un nuevo error con mensaje mejorado
+    const enhancedError = new Error(errorMessage);
+    
+    // Añadir detalles para depuración
+    (enhancedError as any).originalError = error;
+    (enhancedError as any).visitorId = id;
+    (enhancedError as any).timestamp = new Date().toISOString();
+    
+    throw enhancedError;
   }
 };
 
