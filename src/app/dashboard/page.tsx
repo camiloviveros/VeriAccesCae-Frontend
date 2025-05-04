@@ -1,3 +1,4 @@
+// src/app/dashboard/page.tsx (versión mejorada)
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +8,7 @@ import StatCard from '../../../components/dashboard/StatCard';
 import { Loading } from '../../../components/ui/Loading';
 import { Alert } from '../../../components/ui/Alert';
 
-// Tipos de visitantes
+// Heroicons
 import { 
   UserCircleIcon, 
   BuildingOffice2Icon, 
@@ -15,6 +16,7 @@ import {
   UserGroupIcon 
 } from '@heroicons/react/24/outline';
 
+// Definición de tipos
 interface Visitor {
   id: number;
   visitor_type?: string;
@@ -51,127 +53,138 @@ export default function DashboardPage() {
   });
   const [occupancyCount, setOccupancyCount] = useState(0);
 
-  // Función para escuchar cambios en el localStorage de occupancyCount
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const storedCount = localStorage.getItem('occupancyCount');
-      if (storedCount) {
-        setOccupancyCount(parseInt(storedCount, 10));
+  // Función para actualizar datos del dashboard
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Obtener visitantes
+      const visitorsResponse = await accessService.getVisitors();
+      
+      // Procesar visitantes
+      let visitors: Visitor[] = [];
+      if (Array.isArray(visitorsResponse)) {
+        visitors = visitorsResponse.map(v => ({
+          ...v,
+          status: (v.status === 'pending' || v.status === 'inside' || 
+                  v.status === 'outside' || v.status === 'denied') 
+                  ? v.status : 'pending'
+        }));
+      } else if (visitorsResponse && visitorsResponse.results && Array.isArray(visitorsResponse.results)) {
+        visitors = visitorsResponse.results.map(v => ({
+          ...v,
+          status: (v.status === 'pending' || v.status === 'inside' || 
+                  v.status === 'outside' || v.status === 'denied') 
+                  ? v.status : 'pending'
+        }));
+      } else if (visitorsResponse && typeof visitorsResponse === 'object') {
+        const possibleVisitors = Object.values(visitorsResponse).filter(val => 
+          typeof val === 'object' && val !== null && 'id' in val
+        );
+        visitors = possibleVisitors as Visitor[];
       }
-    };
+      
+      // Obtener registros de acceso recientes - ahora con un límite mayor
+      const logsResponse = await accessService.getAccessLogs({ limit: 10 });
+      let accessLogs: AccessLog[] = [];
+      if (Array.isArray(logsResponse)) {
+        accessLogs = logsResponse;
+      } else if (logsResponse && logsResponse.results && Array.isArray(logsResponse.results)) {
+        accessLogs = logsResponse.results;
+      }
+      
+      // Filtrar los logs para mantener solo los más recientes
+      accessLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      accessLogs = accessLogs.slice(0, 5); // Mantener solo los 5 más recientes
+      
+      // Calcular estadísticas correctamente basadas en el status real
+      // Los visitantes de empresa son aquellos con visitor_type = 'business' o con un company definido
+      const businessVisitors = visitors.filter(v => 
+        v.visitor_type === 'business' || Boolean(v.company)
+      ).length;
+      
+      // Los visitantes temporales son aquellos con visitor_type = 'temporary' o con fechas de entrada/salida
+      const temporaryVisitors = visitors.filter(v => 
+        v.visitor_type === 'temporary' || (Boolean(v.entry_date) && Boolean(v.exit_date))
+      ).length;
+      
+      // Los visitantes regulares son todos los demás
+      const regularVisitors = visitors.filter(v => 
+        v.visitor_type === 'regular' || 
+        (!v.visitor_type && !v.company && !v.entry_date && !v.exit_date)
+      ).length;
+      
+      // IMPORTANTE: Contar correctamente los visitantes dentro
+      // Solo contar aquellos con status = 'inside'
+      const visitorsInside = visitors.filter(v => v.status === 'inside').length;
+      
+      // Obtener el contador de aforo actual de localStorage
+      let storedOccupancy = 0;
+      try {
+        const storedCount = localStorage.getItem('occupancyCount');
+        if (storedCount) {
+          storedOccupancy = parseInt(storedCount, 10);
+          // Actualizar también el estado de occupancyCount
+          setOccupancyCount(storedOccupancy);
+        }
+      } catch (err) {
+        console.error('Error reading occupancy from localStorage:', err);
+      }
+      
+      // Total de personas dentro = residentes (del contador de aforo) + visitantes dentro
+      const totalPeopleInside = storedOccupancy + visitorsInside;
+      
+      setStats({
+        totalVisitors: visitors.length,
+        businessVisitors,
+        regularVisitors,
+        temporaryVisitors,
+        peopleInside: totalPeopleInside,
+        visitorsInside,
+        recentAccessLogs: accessLogs
+      });
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError('Error al cargar los datos del dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Agregar evento de escucha para cambios en localStorage
-    window.addEventListener('storage', handleStorageChange);
-
-    // Verificar valor inicial
+  // useEffect para cargar datos iniciales y configurar eventos para actualización
+  useEffect(() => {
+    fetchDashboardData();
+    
+    // Cargar el contador de aforo del localStorage
     const storedCount = localStorage.getItem('occupancyCount');
     if (storedCount) {
       setOccupancyCount(parseInt(storedCount, 10));
     }
-
-    // Limpiar listener al desmontar
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        
-        // Obtener visitantes
-        const visitorsResponse = await accessService.getVisitors();
-        
-        // Procesar visitantes
-        let visitors: Visitor[] = [];
-        if (Array.isArray(visitorsResponse)) {
-          visitors = visitorsResponse.map(v => ({
-            ...v,
-            status: (v.status === 'pending' || v.status === 'inside' || 
-                    v.status === 'outside' || v.status === 'denied') 
-                    ? v.status : undefined
-          }));
-        } else if (visitorsResponse && visitorsResponse.results && Array.isArray(visitorsResponse.results)) {
-          visitors = visitorsResponse.results.map(v => ({
-            ...v,
-            status: (v.status === 'pending' || v.status === 'inside' || 
-                    v.status === 'outside' || v.status === 'denied') 
-                    ? v.status : undefined
-          }));
-        } else if (visitorsResponse && typeof visitorsResponse === 'object') {
-          const possibleVisitors = Object.values(visitorsResponse).filter(val => 
-            typeof val === 'object' && val !== null && 'id' in val
-          );
-          visitors = possibleVisitors as Visitor[];
-        }
-        
-        // Obtener registros de acceso recientes
-        const logsResponse = await accessService.getAccessLogs({ limit: 5 });
-        let accessLogs: AccessLog[] = [];
-        if (Array.isArray(logsResponse)) {
-          accessLogs = logsResponse;
-        } else if (logsResponse && logsResponse.results && Array.isArray(logsResponse.results)) {
-          accessLogs = logsResponse.results;
-        }
-        
-        // Calcular estadísticas
-        const businessVisitors = visitors.filter(v => 
-          v.visitor_type === 'business' || Boolean(v.company)
-        ).length;
-        
-        const temporaryVisitors = visitors.filter(v => 
-          v.visitor_type === 'temporary' || (Boolean(v.entry_date) && Boolean(v.exit_date))
-        ).length;
-        
-        const regularVisitors = visitors.filter(v => 
-          v.visitor_type === 'regular' || 
-          (!v.visitor_type && !v.company && !v.entry_date && !v.exit_date)
-        ).length;
-        
-        // Personas dentro del edificio (visitantes con acceso permitido)
-        const visitorsInside = visitors.filter(v => v.status === 'inside').length;
-        
-        // Obtener el contador de aforo actual de localStorage si existe
-        let storedOccupancy = 0;
-        try {
-          const storedCount = localStorage.getItem('occupancyCount');
-          if (storedCount) {
-            storedOccupancy = parseInt(storedCount, 10);
-            // Actualizar también el estado de occupancyCount
-            setOccupancyCount(storedOccupancy);
-          }
-        } catch (err) {
-          console.error('Error reading occupancy from localStorage:', err);
-        }
-        
-        // Total de personas dentro = residentes (del contador de aforo) + visitantes
-        const totalPeopleInside = storedOccupancy + visitorsInside;
-        
-        setStats({
-          totalVisitors: visitors.length,
-          businessVisitors,
-          regularVisitors,
-          temporaryVisitors,
-          peopleInside: totalPeopleInside,
-          visitorsInside,
-          recentAccessLogs: accessLogs
-        });
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setError('Error al cargar los datos del dashboard');
-      } finally {
-        setLoading(false);
+    
+    // Manejar cambios en el localStorage (para mantener el dashboard actualizado)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'occupancyCount' || e.key === 'visitorsInside') {
+        fetchDashboardData();
       }
     };
     
-    fetchDashboardData();
-
-    // Configurar un intervalo para actualizar los datos cada 10 segundos
+    // Escuchar cambios en localStorage
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Escuchar eventos personalizados para actualizaciones internas
+    window.addEventListener('visitorStatusChanged', fetchDashboardData);
+    window.addEventListener('visitorDeleted', fetchDashboardData);
+    
+    // Configurar actualización periódica cada 10 segundos
     const intervalId = setInterval(fetchDashboardData, 10000);
     
-    // Limpiar el intervalo al desmontar el componente
-    return () => clearInterval(intervalId);
+    // Limpiar listeners y timers
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('visitorStatusChanged', fetchDashboardData);
+      window.removeEventListener('visitorDeleted', fetchDashboardData);
+      clearInterval(intervalId);
+    };
   }, []);
 
   return (

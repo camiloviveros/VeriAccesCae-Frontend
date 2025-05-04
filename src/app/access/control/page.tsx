@@ -1,3 +1,4 @@
+// src/app/access/control/page.tsx (versión mejorada)
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -154,6 +155,9 @@ export default function AccessControlPage() {
         console.log(`Visitor ${visitor.id} entered at ${entryDate.toISOString()}`);
       }
       
+      // Actualizar el localStorage para que el dashboard se actualice
+      updateDashboardCounts(insideVisitors.length);
+      
       setSuccessMessage(`Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -172,6 +176,13 @@ export default function AccessControlPage() {
         v.id === visitor.id ? {...v, status: 'denied' as const} : v
       );
       setVisitors(updatedVisitors);
+      
+      // Actualizar las personas dentro si el visitante estaba dentro
+      if (visitor.status === 'inside') {
+        const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
+        setPeopleInside(insideVisitors);
+        updateDashboardCounts(insideVisitors.length);
+      }
       
       setSuccessMessage(`Acceso denegado a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -194,6 +205,9 @@ export default function AccessControlPage() {
       
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
+      
+      // Actualizar el localStorage para que el dashboard se actualice
+      updateDashboardCounts(insideVisitors.length);
       
       // If it's a temporary visitor, log exit time
       if (visitor.visitor_type === 'temporary') {
@@ -232,17 +246,42 @@ export default function AccessControlPage() {
       if (selectedVisitor.status === 'inside') {
         const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
         setPeopleInside(insideVisitors);
+        
+        // Actualizar el localStorage para que el dashboard se actualice
+        updateDashboardCounts(insideVisitors.length);
       }
       
       setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado`);
       setShowDeleteModal(false);
       setSelectedVisitor(null);
+      
+      // Trigger event to update the dashboard
+      window.dispatchEvent(new Event('visitorDeleted'));
+      
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Error deleting visitor:', err);
       setError('Error al eliminar visitante');
     } finally {
       setIsDeletingVisitor(false);
+    }
+  };
+
+  // Función para actualizar los contadores del dashboard
+  const updateDashboardCounts = (insideCount: number) => {
+    // Actualizar localStorage y disparar un evento de storage para que el dashboard lo detecte
+    localStorage.setItem('visitorsInside', insideCount.toString());
+    
+    // Disparar un evento personalizado para que otras partes de la aplicación sepan que hubo cambios
+    window.dispatchEvent(new Event('visitorStatusChanged'));
+    
+    // Si estamos en el navegador, usar el método de Storage Event
+    if (typeof window !== 'undefined') {
+      // Crear un evento storage para que otras pestañas sepan que hubo cambios
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'visitorsInside',
+        newValue: insideCount.toString()
+      }));
     }
   };
 

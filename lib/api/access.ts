@@ -264,12 +264,24 @@ export const updateVisitorStatus = async (id: string | number, status: string): 
     try {
       const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/update_status/`, { status });
       console.log('Status update response:', response.data);
+      
+      // Disparar un evento para que el dashboard se actualice
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('visitorStatusChanged'));
+      }
+      
       return response.data;
     } catch (firstError: unknown) {
       console.log('Trying alternative route for status update');
       // If first attempt fails, try with standard update endpoint
       const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
       console.log('Status update response (alternative route):', response.data);
+      
+      // Disparar un evento para que el dashboard se actualice
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('visitorStatusChanged'));
+      }
+      
       return response.data;
     }
   } catch (error: unknown) {
@@ -286,10 +298,15 @@ export const deleteVisitor = async (id: string | number): Promise<void> => {
     console.log(`Eliminando visitante ${id}`);
     await apiClient.delete(`/access/visitors/${id}/`);
     console.log(`Visitante ${id} eliminado correctamente`);
+    
+    // Disparar un evento para que el dashboard se actualice
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('visitorDeleted'));
+    }
   } catch (error: unknown) {
     console.error(`Error deleting visitor (${id}):`, error);
     
-    // Create more specific error message
+    // Crear mensaje de error más específico
     const err = error as any; // Usamos 'any' para evitar errores de TypeScript
     if (err?.response?.status === 404) {
       throw new Error(`Visitante con ID ${id} no encontrado o ya fue eliminado`);
