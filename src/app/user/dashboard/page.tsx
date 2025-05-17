@@ -8,18 +8,22 @@ import { accessService, securityService } from '../../../../lib/api';
 import { Button } from '../../../../components/ui/Button';
 import { Alert, AlertTitle } from '../../../../components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
+import { Badge } from '../../../../components/ui/Badge';
 
-interface Visitor {
+interface Visit {
   id: number;
   first_name: string;
   last_name: string;
   status?: string;
   created_at: string;
+  visitor_type?: string;
 }
 
 export default function UserDashboardPage() {
   const router = useRouter();
-  const [myVisitors, setMyVisitors] = useState<Visitor[]>([]);
+  const [myVisits, setMyVisits] = useState<Visit[]>([]);
+  const [pendingVisits, setPendingVisits] = useState<Visit[]>([]);
+  const [approvedVisits, setApprovedVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [emergencyMessage, setEmergencyMessage] = useState('');
@@ -33,29 +37,34 @@ export default function UserDashboardPage() {
       return;
     }
 
-    fetchMyVisitors();
+    fetchMyVisits();
   }, [router]);
 
-  const fetchMyVisitors = async () => {
+  const fetchMyVisits = async () => {
     try {
       setLoading(true);
       const response = await accessService.getVisitors();
       
-      let visitorsList: Visitor[] = [];
+      let visitsList: Visit[] = [];
       if (Array.isArray(response)) {
-        visitorsList = response;
+        visitsList = response;
       } else if (response?.results && Array.isArray(response.results)) {
-        visitorsList = response.results;
+        visitsList = response.results;
       } else if (response && typeof response === 'object') {
-        visitorsList = Object.values(response).filter(val => 
+        visitsList = Object.values(response).filter(val => 
           typeof val === 'object' && val !== null && 'id' in val
-        ) as Visitor[];
+        ) as Visit[];
       }
       
-      setMyVisitors(visitorsList);
+      // Sort by creation date, newest first
+      visitsList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setMyVisits(visitsList);
+      setPendingVisits(visitsList.filter(v => v.status === 'pending'));
+      setApprovedVisits(visitsList.filter(v => v.status === 'inside'));
     } catch (err) {
-      console.error('Error fetching visitors:', err);
-      setError('No se pudieron cargar los visitantes');
+      console.error('Error fetching visits:', err);
+      setError('No se pudieron cargar las visitas');
     } finally {
       setLoading(false);
     }
@@ -85,25 +94,38 @@ export default function UserDashboardPage() {
     }
   };
 
+  const getStatusBadge = (status?: string) => {
+    switch(status) {
+      case 'inside':
+        return <Badge variant="success">Dentro</Badge>;
+      case 'outside':
+        return <Badge variant="secondary">Fuera</Badge>;
+      case 'denied':
+        return <Badge variant="destructive">Denegado</Badge>;
+      default:
+        return <Badge variant="info">Pendiente</Badge>;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-white">
       {/* Navbar */}
-      <nav className="bg-white shadow-sm">
+      <nav className="bg-blue-600 shadow-sm text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-gray-900">VeriAccessSCAE</h1>
+                <h1 className="text-xl font-bold">VeriAccessSCAE</h1>
               </div>
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <Link href="/user/dashboard" className="border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <Link href="/user/dashboard" className="border-white text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Dashboard
                 </Link>
-                <Link href="/user/visitors" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                  Mis Visitantes
+                <Link href="/user/visits" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                  Mis Visitas
                 </Link>
-                <Link href="/user/create-qr" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                  Generar QR
+                <Link href="/user/create-qr" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                  Registrar Visita
                 </Link>
               </div>
             </div>
@@ -115,7 +137,7 @@ export default function UserDashboardPage() {
                   localStorage.removeItem('user');
                   router.push('/auth/login');
                 }}
-                className="text-gray-500 hover:text-gray-700 text-sm font-medium"
+                className="text-white hover:text-gray-200 text-sm font-medium"
               >
                 Cerrar Sesión
               </button>
@@ -136,34 +158,34 @@ export default function UserDashboardPage() {
           
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Quick Actions Card */}
-            <Card className="bg-white shadow-lg">
-              <CardHeader>
+            <Card className="bg-white shadow-lg border border-gray-200">
+              <CardHeader className="bg-gray-50 border-b border-gray-200">
                 <CardTitle>Acciones Rápidas</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <div className="space-y-4">
                   <Button 
                     onClick={() => router.push('/user/create-qr')}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    Generar Código QR para Visitante
+                    Registrar Nueva Visita
                   </Button>
                   <Button 
-                    onClick={() => router.push('/user/visitors')}
-                    className="w-full bg-gray-600 hover:bg-gray-700 text-white"
+                    onClick={() => router.push('/user/visits')}
+                    className="w-full bg-gray-700 hover:bg-gray-800 text-white"
                   >
-                    Ver Mis Visitantes
+                    Ver Mis Visitas
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
             {/* Emergency Alert Card */}
-            <Card className="bg-white shadow-lg">
-              <CardHeader>
+            <Card className="bg-white shadow-lg border border-gray-200">
+              <CardHeader className="bg-gray-50 border-b border-gray-200">
                 <CardTitle>Enviar Alerta</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -203,38 +225,39 @@ export default function UserDashboardPage() {
             </Card>
           </div>
 
-          {/* Recent Visitors */}
+          {/* Visitas Pendientes */}
           <div className="mt-8">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Mis Visitantes Recientes</h2>
-            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Visitas Pendientes de Aprobación</h2>
+            <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
               {loading ? (
                 <div className="p-4 flex items-center justify-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
                 </div>
-              ) : myVisitors.length > 0 ? (
+              ) : pendingVisits.length > 0 ? (
                 <ul className="divide-y divide-gray-200">
-                  {myVisitors.slice(0, 5).map((visitor) => (
-                    <li key={visitor.id} className="px-4 py-4 sm:px-6">
+                  {pendingVisits.slice(0, 3).map((visit) => (
+                    <li key={visit.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-blue-600 truncate">
-                            {visitor.first_name} {visitor.last_name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(visitor.created_at).toLocaleDateString()}
-                          </p>
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-500 font-medium">
+                                {visit.first_name.charAt(0)}{visit.last_name.charAt(0)}
+                              </span>
+                            </div>
+                            <div className="ml-4">
+                              <p className="text-sm font-medium text-gray-900">
+                                {visit.first_name} {visit.last_name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Registrado: {new Date(visit.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                         <div>
-                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            visitor.status === 'inside' ? 'bg-green-100 text-green-800' : 
-                            visitor.status === 'outside' ? 'bg-gray-100 text-gray-800' :
-                            visitor.status === 'denied' ? 'bg-red-100 text-red-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
-                            {visitor.status === 'inside' ? 'Dentro' : 
-                             visitor.status === 'outside' ? 'Fuera' :
-                             visitor.status === 'denied' ? 'Denegado' : 'Pendiente'}
-                          </span>
+                          {getStatusBadge(visit.status)}
+                          <p className="text-xs text-gray-500 mt-1 text-center">En revisión</p>
                         </div>
                       </div>
                     </li>
@@ -242,14 +265,76 @@ export default function UserDashboardPage() {
                 </ul>
               ) : (
                 <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
-                  No ha registrado visitantes aún.
+                  No tienes visitas pendientes de aprobación.
                 </div>
               )}
-              {myVisitors.length > 0 && (
-                <div className="bg-gray-50 px-4 py-3 text-right sm:px-6">
+              {pendingVisits.length > 3 && (
+                <div className="bg-gray-50 px-4 py-3 text-right sm:px-6 border-t border-gray-200">
                   <Button
                     variant="outline"
-                    onClick={() => router.push('/user/visitors')}
+                    onClick={() => router.push('/user/visits')}
+                    className="text-blue-600"
+                  >
+                    Ver Todos
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Visitas Recientes */}
+          <div className="mt-8">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Visitas Activas</h2>
+            <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
+              {loading ? (
+                <div className="p-4 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
+              ) : approvedVisits.length > 0 ? (
+                <ul className="divide-y divide-gray-200">
+                  {approvedVisits.slice(0, 3).map((visit) => (
+                    <li key={visit.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+                              <span className="text-green-500 font-medium">
+                                {visit.first_name.charAt(0)}{visit.last_name.charAt(0)}
+                              </span>
+                            </div>
+                            <div className="ml-4">
+                              <p className="text-sm font-medium text-gray-900">
+                                {visit.first_name} {visit.last_name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Registrado: {new Date(visit.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/user/visits/${visit.id}/qr`)}
+                          className="text-blue-600"
+                        >
+                          Ver QR
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
+                  No tienes visitas activas actualmente.
+                </div>
+              )}
+              {approvedVisits.length > 3 && (
+                <div className="bg-gray-50 px-4 py-3 text-right sm:px-6 border-t border-gray-200">
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push('/user/visits')}
+                    className="text-blue-600"
                   >
                     Ver Todos
                   </Button>
