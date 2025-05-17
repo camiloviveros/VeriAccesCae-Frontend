@@ -1,3 +1,4 @@
+// src/app/parking/vehicles/new/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -23,6 +24,7 @@ export default function NewVehiclePage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,10 +39,16 @@ export default function NewVehiclePage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
     
     try {
       await parkingService.createVehicle(formData);
-      router.push('/parking/vehicles');
+      setSuccess('Vehículo registrado correctamente');
+      
+      // Redireccionar después de un breve retraso para mostrar el mensaje de éxito
+      setTimeout(() => {
+        router.push('/parking/vehicles');
+      }, 2000);
     } catch (err: any) {
       console.error('Error creating vehicle:', err);
       
@@ -76,8 +84,15 @@ export default function NewVehiclePage() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+        
+        {success && (
+          <Alert variant="success">
+            <AlertTitle>Éxito</AlertTitle>
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
 
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg">
           <div className="px-4 py-5 sm:p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -93,7 +108,7 @@ export default function NewVehiclePage() {
                       required
                       value={formData.license_plate}
                       onChange={handleChange}
-                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
                       placeholder="ABC-123"
                     />
                   </div>
@@ -111,7 +126,7 @@ export default function NewVehiclePage() {
                       required
                       value={formData.brand}
                       onChange={handleChange}
-                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
                       placeholder="Toyota, Ford, Honda, etc."
                     />
                   </div>
@@ -129,7 +144,7 @@ export default function NewVehiclePage() {
                       required
                       value={formData.model}
                       onChange={handleChange}
-                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
                       placeholder="Corolla, Mustang, Civic, etc."
                     />
                   </div>
@@ -147,7 +162,7 @@ export default function NewVehiclePage() {
                       required
                       value={formData.color}
                       onChange={handleChange}
-                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
                       placeholder="Blanco, Negro, Rojo, etc."
                     />
                   </div>
@@ -167,6 +182,7 @@ export default function NewVehiclePage() {
                   type="submit"
                   isLoading={loading}
                   disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
                   Registrar Vehículo
                 </Button>

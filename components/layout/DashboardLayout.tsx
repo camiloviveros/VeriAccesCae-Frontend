@@ -1,3 +1,4 @@
+// components/layout/DashboardLayout.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,7 +10,8 @@ import Notifications from '../ui/Notifications';
 // Actualizado la importación de Heroicons
 import { 
   HomeIcon, UsersIcon, ShieldCheckIcon, 
-  DocumentTextIcon, TruckIcon, ArrowRightOnRectangleIcon 
+  DocumentTextIcon, TruckIcon, ArrowRightOnRectangleIcon,
+  QrCodeIcon
 } from '@heroicons/react/24/outline';
 
 type User = {
@@ -77,6 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Control de Acceso', href: '/access', icon: ShieldCheckIcon },
     { name: 'Visitantes', href: '/access/visitors', icon: UsersIcon },
+    { name: 'Escanear QR', href: '/access/scan', icon: QrCodeIcon },
     { name: 'Vehículos', href: '/parking/vehicles', icon: TruckIcon },
     { name: 'Seguridad', href: '/security', icon: ShieldCheckIcon },
     { name: 'Reportes', href: '/reports', icon: DocumentTextIcon },
@@ -105,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   className={`
                     group flex items-center px-2 py-2 text-sm font-medium rounded-md
                     ${pathname.startsWith(item.href) 
-                      ? 'bg-primary-100 text-primary-900' 
+                      ? 'bg-blue-100 text-blue-900' 
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
                   `}
                 >
@@ -113,7 +116,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     className={`
                       mr-3 h-5 w-5 flex-shrink-0
                       ${pathname.startsWith(item.href) 
-                        ? 'text-primary-500' 
+                        ? 'text-blue-500' 
                         : 'text-gray-400 group-hover:text-gray-500'}
                     `} 
                     aria-hidden="true" 
@@ -140,7 +143,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {/* Perfil de usuario */}
               <div className="relative ml-3">
                 <div className="flex items-center">
-                  <Link href="/auth/profile" className="mr-2 text-sm font-medium text-gray-700 hover:text-primary-600">
+                  <Link href="/auth/profile" className="mr-2 text-sm font-medium text-gray-700 hover:text-blue-600">
                     {user?.first_name} {user?.last_name}
                     <span className="text-xs text-gray-500 ml-1">
                       ({user?.role?.name || 'Usuario'})

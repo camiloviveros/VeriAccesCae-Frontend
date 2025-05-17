@@ -260,7 +260,7 @@ export const updateVisitorStatus = async (id: string | number, status: string): 
   try {
     console.log(`Updating visitor ${id} status to: ${status}`);
     
-    // First try with dedicated endpoint
+    // Primero intentar con el endpoint específico para actualizar el estado
     try {
       const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/update_status/`, { status });
       console.log('Status update response:', response.data);
@@ -272,12 +272,12 @@ export const updateVisitorStatus = async (id: string | number, status: string): 
       
       return response.data;
     } catch (firstError: unknown) {
-      console.log('Trying alternative route for status update');
-      // If first attempt fails, try with standard update endpoint
+      console.log('Trying alternative route for status update...');
+      // Si falla el primer intento, usar el endpoint estándar de actualización
       const response = await apiClient.patch<VisitorResponse>(`/access/visitors/${id}/`, { status });
       console.log('Status update response (alternative route):', response.data);
       
-      // Disparar un evento para que el dashboard se actualice
+      // Disparar un evento para actualizar el dashboard
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('visitorStatusChanged'));
       }
@@ -287,83 +287,29 @@ export const updateVisitorStatus = async (id: string | number, status: string): 
   } catch (error: unknown) {
     console.error(`Error updating visitor status (${id}):`, error);
     
-    // Create a clearer error message
-    const enhancedError = new Error('Error al actualizar estado del visitante. Verificar si la base de datos tiene el campo "status".');
+    // Crear un mensaje de error más claro
+    const enhancedError = new Error('Error al actualizar estado del visitante. Verificar si el backend tiene implementado el método para cambiar estado.');
     throw enhancedError;
   }
 };
 
 export const deleteVisitor = async (id: string | number): Promise<void> => {
   try {
-    console.log(`Intentando eliminar visitante con ID: ${id}`);
+    console.log(`Eliminando visitante con ID: ${id}`);
     
-    // Convertir el id a string para asegurar que se envía en el formato correcto
+    // Asegurarnos de que el ID es un string
     const idToDelete = id.toString();
     
-    // Enviar solicitud DELETE al backend con un timeout más largo
-    const response = await apiClient.delete(`/access/visitors/${idToDelete}/`, {
-      timeout: 15000 // Aumentar el timeout a 15 segundos
-    });
-    
-    console.log(`Respuesta del backend al eliminar visitante ${id}:`, response.status);
+    // Usar directamente el endpoint correcto
+    await apiClient.delete(`/access/visitors/${idToDelete}/`);
     
     // Notificar a otros componentes sobre la eliminación exitosa
     if (typeof window !== 'undefined') {
-      console.log(`Disparando evento visitorDeleted para el visitante ${id}`);
       window.dispatchEvent(new Event('visitorDeleted'));
-      
-      // Actualizar cualquier contador en localStorage si es necesario
-      const visitorInsideCount = localStorage.getItem('visitorsInside');
-      if (visitorInsideCount) {
-        const currentCount = parseInt(visitorInsideCount, 10);
-        if (!isNaN(currentCount) && currentCount > 0) {
-          localStorage.setItem('visitorsInside', (currentCount - 1).toString());
-        }
-      }
     }
   } catch (error: unknown) {
-    console.error(`Error detallado al eliminar visitante (${id}):`, error);
-    
-    // Analizar el error para proporcionar información útil
-    const err = error as any;
-    
-    // Si es un error 404, simplemente registrarlo pero no lanzar excepción
-    // (el visitante ya podría haber sido eliminado)
-    if (err?.response?.status === 404) {
-      console.warn(`Visitante con ID ${id} no encontrado o ya fue eliminado`);
-      // Aún así disparamos el evento para actualizar la UI
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('visitorDeleted'));
-      }
-      return; // No lanzamos excepción
-    }
-    
-    // Para errores reales, preparar un mensaje detallado
-    let errorMessage = `Error al eliminar visitante ${id}`;
-    
-    if (err?.response?.status === 403) {
-      errorMessage = 'No tiene permisos para eliminar este visitante';
-    } else if (err?.response?.status === 500) {
-      errorMessage = 'Error del servidor al intentar eliminar el visitante';
-    } else if (err?.response?.data) {
-      if (typeof err.response.data === 'string') {
-        errorMessage = err.response.data;
-      } else if (typeof err.response.data === 'object') {
-        errorMessage = JSON.stringify(err.response.data);
-      }
-    } else if (err?.message) {
-      errorMessage = err.message;
-    }
-    
-    // Crear un nuevo error con mensaje mejorado
-    const enhancedError = new Error(errorMessage);
-    
-    // Añadir detalles para depuración
-    (enhancedError as any).originalError = error;
-    (enhancedError as any).visitorId = id;
-    (enhancedError as any).timestamp = new Date().toISOString();
-    
-    throw enhancedError;
+    console.error(`Error al eliminar visitante (${id}):`, error);
+    throw error;
   }
 };
 
@@ -429,6 +375,16 @@ export const getQRCode = async (id: string | number): Promise<QRCodeResponse> =>
     return response.data;
   } catch (error: unknown) {
     console.error("Error getting QR code:", error);
+    throw error;
+  }
+};
+
+export const validateQR = async (data: { qr_code: string, access_point_id: number }): Promise<any> => {
+  try {
+    const response = await apiClient.post('/access/visitor-access/validate_qr/', data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error("Error validating QR code:", error);
     throw error;
   }
 };
