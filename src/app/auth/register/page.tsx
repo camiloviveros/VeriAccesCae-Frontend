@@ -70,8 +70,8 @@ export default function RegisterPage() {
           localStorage.setItem('user', JSON.stringify(data.user));
         }
         
-        // Redireccionar al dashboard
-        router.push('/dashboard');
+        // Redireccionar al dashboard de usuario normal
+        router.push('/user/dashboard');
       } else {
         // Si no hay tokens, redireccionar al login
         router.push('/auth/login');
