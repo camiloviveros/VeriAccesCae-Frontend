@@ -1,4 +1,3 @@
-// src/app/access/control/page.tsx - Modal de eliminación corregido
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -115,108 +114,94 @@ export default function AccessControlPage() {
     console.log('🗑️ Preparando eliminación:', visitor);
     setSelectedVisitor(visitor);
     setShowDeleteModal(true);
-    setError(''); // Limpiar errores previos
+    setError('');
+    setIsDeletingVisitor(false);
   };
 
   // Función de eliminación principal
   const confirmDeleteVisitor = async () => {
-    if (!selectedVisitor) {
-      console.error('❌ No hay visitante seleccionado');
-      setError('Error: No hay visitante seleccionado para eliminar');
+    if (!selectedVisitor || isDeletingVisitor) {
+      console.log('❌ No se puede eliminar - Visitante no seleccionado o ya eliminando');
       return;
     }
     
     const visitorName = `${selectedVisitor.first_name} ${selectedVisitor.last_name}`;
     const visitorId = selectedVisitor.id;
     
+    console.log(`🔄 Iniciando eliminación de visitante ID ${visitorId}: ${visitorName}`);
+    
     try {
       setIsDeletingVisitor(true);
       setError('');
-      console.log(`🔄 Eliminando visitante ID ${visitorId}: ${visitorName}`);
       
-      // Intentar eliminar del backend
-      try {
-        await accessService.deleteVisitor(visitorId);
-        console.log(`✅ Visitante ${visitorId} eliminado del backend`);
-      } catch (apiError: any) {
-        console.error('❌ Error en API de eliminación:', apiError);
-        
-        // Si es 404, el visitante ya no existe en el backend
-        if (apiError?.response?.status === 404) {
-          console.log('ℹ️ Visitante no encontrado en backend, eliminando solo localmente');
-        } else {
-          throw apiError;
-        }
-      }
+      // Eliminar visitante del backend
+      console.log(`🔄 Eliminando del backend...`);
+      await accessService.deleteVisitor(visitorId.toString());
+      console.log(`✅ Visitante ${visitorId} eliminado del backend exitosamente`);
       
-      // Actualizar estado local
-      console.log('🔄 Actualizando estado local...');
+      // Actualizar estado local inmediatamente
       const updatedVisitors = visitors.filter(v => v.id !== visitorId);
       setVisitors(updatedVisitors);
       
-      // Actualizar visitantes dentro si es necesario
+      // Actualizar visitantes dentro si el visitante estaba dentro
+      const updatedPeopleInside = updatedVisitors.filter(v => v.status === 'inside');
+      setPeopleInside(updatedPeopleInside);
+      
+      // Actualizar contador de aforo si es necesario
       if (selectedVisitor.status === 'inside') {
-        const updatedPeopleInside = updatedVisitors.filter(v => v.status === 'inside');
-        setPeopleInside(updatedPeopleInside);
-        
-        // Actualizar contador de aforo
         const newCount = Math.max(0, occupancyCount - 1);
         setOccupancyCount(newCount);
         localStorage.setItem('occupancyCount', newCount.toString());
         console.log(`📊 Aforo actualizado: ${newCount}`);
       }
       
-      // Mostrar éxito y limpiar
-      setSuccessMessage(`✅ Visitante ${visitorName} eliminado correctamente`);
+      // Cerrar modal y limpiar estado
       setShowDeleteModal(false);
       setSelectedVisitor(null);
       
+      // Mostrar mensaje de éxito
+      setSuccessMessage(`✅ Visitante ${visitorName} eliminado correctamente`);
+      
       // Notificar otros componentes
       window.dispatchEvent(new Event('visitorDeleted'));
-      console.log(`✅ Eliminación completada: ${visitorName}`);
       
-      // Limpiar mensaje después de 3 segundos
+      // Refrescar datos desde el servidor para asegurar sincronización
+      setTimeout(() => {
+        fetchVisitors();
+      }, 500);
+      
+      // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccessMessage(''), 3000);
       
+      console.log(`✅ Eliminación completada exitosamente: ${visitorName}`);
+      
     } catch (error: any) {
-      console.error('❌ Error completo en eliminación:', error);
+      console.error('❌ Error durante la eliminación:', error);
       
-      let errorMessage = 'Error inesperado al eliminar el visitante';
+      let errorMessage = 'Error al eliminar el visitante';
       
-      if (error?.response) {
-        const status = error.response.status;
-        const data = error.response.data;
-        
-        switch (status) {
-          case 400:
-            errorMessage = 'Solicitud inválida. Verifique los datos del visitante.';
-            break;
-          case 401:
-            errorMessage = 'No autorizado. Por favor, inicie sesión nuevamente.';
+      if (error?.response?.status) {
+        switch (error.response.status) {
+          case 404:
+            errorMessage = 'El visitante no fue encontrado. Es posible que ya haya sido eliminado.';
+            // Si es 404, actualizar la lista ya que el visitante no existe
+            fetchVisitors();
             break;
           case 403:
             errorMessage = 'No tiene permisos para eliminar este visitante.';
             break;
-          case 404:
-            errorMessage = 'Visitante no encontrado en el servidor.';
-            break;
           case 500:
-            errorMessage = 'Error del servidor. Contacte al administrador del sistema.';
+            errorMessage = 'Error del servidor. Intente nuevamente.';
             break;
           default:
-            if (data && typeof data === 'string') {
-              errorMessage = data;
-            } else if (data && data.detail) {
-              errorMessage = data.detail;
-            } else {
-              errorMessage = `Error del servidor (${status}). Contacte al administrador.`;
-            }
+            errorMessage = error.response?.data?.detail || 'Error al comunicarse con el servidor.';
         }
       } else if (error?.message) {
-        errorMessage = `Error de conexión: ${error.message}`;
+        errorMessage = error.message;
       }
       
-      setError(`❌ ${errorMessage}`);
+      setError(errorMessage);
+      
     } finally {
       setIsDeletingVisitor(false);
     }
@@ -224,9 +209,11 @@ export default function AccessControlPage() {
 
   // Función para cancelar eliminación
   const cancelDelete = () => {
-    setShowDeleteModal(false);
-    setSelectedVisitor(null);
-    setError('');
+    if (!isDeletingVisitor) {
+      setShowDeleteModal(false);
+      setSelectedVisitor(null);
+      setError('');
+    }
   };
 
   // Función para permitir acceso
@@ -560,99 +547,135 @@ export default function AccessControlPage() {
         )}
       </div>
 
-      {/* Modal de confirmación de eliminación CORREGIDO */}
+      {/* Modal de confirmación de eliminación - COMPLETAMENTE PERSONALIZADO */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          {/* Overlay con backdrop */}
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            {/* Overlay oscuro */}
-            <div 
-              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
-              aria-hidden="true"
-              onClick={!isDeletingVisitor ? cancelDelete : undefined}
-            ></div>
-
-            {/* Centrado vertical */}
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-            {/* Modal */}
-            <div className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Overlay fijo - semi-transparente */}
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-60 transition-opacity duration-200"
+            onClick={!isDeletingVisitor ? cancelDelete : undefined}
+          />
+          
+          {/* Contenedor modal centrado */}
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all duration-200 scale-100">
+              {/* Header del modal */}
+              <div className="bg-red-50 px-6 py-4 border-b border-red-100 rounded-t-xl">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                  <div className="ml-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
                       Eliminar Visitante
                     </h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-500">
-                        ¿Está seguro de que desea eliminar al visitante{' '}
-                        <span className="font-semibold text-gray-900">
-                          {selectedVisitor?.first_name} {selectedVisitor?.last_name}
-                        </span>?
-                      </p>
-                    </div>
-                    
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4 mt-4">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm text-yellow-700">
-                            <strong>Atención:</strong> Esta acción eliminará permanentemente todos los registros asociados con este visitante.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {selectedVisitor?.status === 'inside' && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-                        <p className="text-sm text-blue-700">
-                          ℹ️ <strong>Visitante dentro del edificio:</strong> También se actualizará el contador de aforo.
-                        </p>
-                      </div>
-                    )}
-                    
-                    {selectedVisitor && (
-                      <div className="bg-gray-50 rounded-md p-3 mb-4">
-                        <div className="text-sm text-gray-600">
-                          <p><strong>ID:</strong> {selectedVisitor.id}</p>
-                          <p><strong>Estado:</strong> {selectedVisitor.status}</p>
-                          {selectedVisitor.visitor_type && <p><strong>Tipo:</strong> {selectedVisitor.visitor_type}</p>}
-                        </div>
-                      </div>
-                    )}
+                    <p className="text-sm text-red-600">
+                      Esta acción no se puede deshacer
+                    </p>
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={confirmDeleteVisitor}
-                  isLoading={isDeletingVisitor}
-                  disabled={isDeletingVisitor}
-                  className="w-full sm:w-auto sm:ml-3"
-                >
-                  {isDeletingVisitor ? 'Eliminando...' : 'Sí, Eliminar Permanentemente'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={cancelDelete}
-                  disabled={isDeletingVisitor}
-                  className="mt-3 w-full sm:mt-0 sm:w-auto"
-                >
-                  Cancelar
-                </Button>
+
+              {/* Contenido del modal */}
+              <div className="px-6 py-4">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-3">
+                    ¿Está completamente seguro de que desea eliminar al visitante?
+                  </p>
+                  
+                  {/* Info del visitante */}
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center">
+                      <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                        <span className="text-blue-600 font-semibold text-lg">
+                          {selectedVisitor?.first_name?.charAt(0)}{selectedVisitor?.last_name?.charAt(0)}
+                        </span>
+                      </div>
+                      <div className="ml-3">
+                        <p className="font-semibold text-gray-900">
+                          {selectedVisitor?.first_name} {selectedVisitor?.last_name}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          ID: {selectedVisitor?.id} • Estado: {selectedVisitor?.status || 'Pendiente'}
+                        </p>
+                        {selectedVisitor?.visitor_type && (
+                          <p className="text-sm text-gray-600">
+                            Tipo: {selectedVisitor.visitor_type}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Advertencia sobre visitante dentro */}
+                {selectedVisitor?.status === 'inside' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-blue-700">
+                          <span className="font-medium">Nota:</span> Este visitante está actualmente dentro del edificio. 
+                          Su eliminación actualizará automáticamente el contador de aforo.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Advertencia general */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-yellow-700">
+                        Se eliminarán permanentemente todos los registros asociados con este visitante.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer con botones */}
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 rounded-b-xl">
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 space-y-3 space-y-reverse sm:space-y-0">
+                  <button
+                    type="button"
+                    onClick={cancelDelete}
+                    disabled={isDeletingVisitor}
+                    className="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeleteVisitor}
+                    disabled={isDeletingVisitor}
+                    className="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isDeletingVisitor ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Eliminando...
+                      </>
+                    ) : (
+                      'Eliminar Permanentemente'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
