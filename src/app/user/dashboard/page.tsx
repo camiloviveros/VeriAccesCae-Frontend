@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { accessService, securityService } from '../../../../lib/api';
+import { accessService, securityService, authService } from '../../../../lib/api';
 import { Button } from '../../../../components/ui/Button';
 import { Alert, AlertTitle } from '../../../../components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
@@ -19,8 +19,19 @@ interface Visit {
   visitor_type?: string;
 }
 
+interface User {
+  id: number;
+  username: string;
+  is_staff?: boolean;
+  is_superuser?: boolean;
+  role?: {
+    name: string;
+  };
+}
+
 export default function UserDashboardPage() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [myVisits, setMyVisits] = useState<Visit[]>([]);
   const [pendingVisits, setPendingVisits] = useState<Visit[]>([]);
   const [approvedVisits, setApprovedVisits] = useState<Visit[]>([]);
@@ -37,8 +48,29 @@ export default function UserDashboardPage() {
       return;
     }
 
+    // Load user data
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (err) {
+        console.error('Error parsing user data:', err);
+      }
+    }
+
     fetchMyVisits();
+    fetchCurrentUser();
   }, [router]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const userData = await authService.getCurrentUser();
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+    }
+  };
 
   const fetchMyVisits = async () => {
     try {
@@ -107,6 +139,9 @@ export default function UserDashboardPage() {
     }
   };
 
+  // Check if user is admin
+  const isAdmin = user?.is_staff || user?.is_superuser || user?.role?.name === 'Administrator';
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navbar */}
@@ -127,9 +162,18 @@ export default function UserDashboardPage() {
                 <Link href="/user/create-qr" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Registrar Visita
                 </Link>
+                {isAdmin && (
+                  <Link href="/dashboard" className="border-transparent text-yellow-200 hover:border-yellow-200 hover:text-yellow-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                    ⚙️ Panel Admin
+                  </Link>
+                )}
               </div>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm">
+                {user?.username} 
+                {isAdmin && <span className="ml-1 text-yellow-200">(Admin)</span>}
+              </span>
               <button 
                 onClick={() => {
                   localStorage.removeItem('access_token');
@@ -148,7 +192,16 @@ export default function UserDashboardPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-6">Dashboard de Usuario</h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900">Dashboard de Usuario</h1>
+            {isAdmin && (
+              <Link href="/dashboard">
+                <Button className="bg-orange-600 hover:bg-orange-700 text-white">
+                  ⚙️ Ir al Panel de Administración
+                </Button>
+              </Link>
+            )}
+          </div>
           
           {error && (
             <Alert variant="error" className="mb-6">
@@ -176,6 +229,14 @@ export default function UserDashboardPage() {
                   >
                     Ver Mis Visitas
                   </Button>
+                  {isAdmin && (
+                    <Button 
+                      onClick={() => router.push('/dashboard')}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      ⚙️ Panel de Administración
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -225,6 +286,7 @@ export default function UserDashboardPage() {
             </Card>
           </div>
 
+          {/* Rest of the component remains the same */}
           {/* Visitas Pendientes */}
           <div className="mt-8">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Visitas Pendientes de Aprobación</h2>
@@ -282,7 +344,7 @@ export default function UserDashboardPage() {
             </div>
           </div>
 
-          {/* Visitas Recientes */}
+          {/* Visitas Activas */}
           <div className="mt-8">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Visitas Activas</h2>
             <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
@@ -327,6 +389,13 @@ export default function UserDashboardPage() {
               ) : (
                 <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
                   No tienes visitas activas actualmente.
+                  <div className="mt-3">
+                    <Link href="/user/create-qr">
+                      <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                        Registrar Primera Visita
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               )}
               {approvedVisits.length > 3 && (

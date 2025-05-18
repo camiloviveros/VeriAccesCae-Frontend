@@ -1,5 +1,4 @@
-// src/app/access/control/page.tsx (versión corregida)
-
+// src/app/access/control/page.tsx - Eliminación 100% funcional
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -32,7 +31,7 @@ const parseVisitorStatus = (status?: string): 'pending' | 'inside' | 'outside' |
   if (status === 'pending' || status === 'inside' || status === 'outside' || status === 'denied') {
     return status;
   }
-  return 'pending'; // Valor por defecto
+  return 'pending';
 };
 
 const ensureVisitor = (visitor: any): Visitor => {
@@ -59,25 +58,29 @@ export default function AccessControlPage() {
   useEffect(() => {
     fetchVisitors();
     
-    // Cargar el contador de aforo del localStorage
     const storedCount = localStorage.getItem('occupancyCount');
     if (storedCount) {
       setOccupancyCount(parseInt(storedCount, 10));
     }
     
-    // Configurar eventos para actualizar la lista cuando cambie el estado
-    window.addEventListener('visitorStatusChanged', fetchVisitors);
-    window.addEventListener('visitorDeleted', fetchVisitors);
+    const handleVisitorChange = () => {
+      console.log('Evento detectado, recargando visitantes...');
+      fetchVisitors();
+    };
+
+    window.addEventListener('visitorStatusChanged', handleVisitorChange);
+    window.addEventListener('visitorDeleted', handleVisitorChange);
     
     return () => {
-      window.removeEventListener('visitorStatusChanged', fetchVisitors);
-      window.removeEventListener('visitorDeleted', fetchVisitors);
+      window.removeEventListener('visitorStatusChanged', handleVisitorChange);
+      window.removeEventListener('visitorDeleted', handleVisitorChange);
     };
   }, []);
 
   const fetchVisitors = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Cargando visitantes...');
       const response = await accessService.getVisitors();
       
       let visitorsList: Visitor[] = [];
@@ -93,72 +96,151 @@ export default function AccessControlPage() {
           .map(ensureVisitor);
       }
       
+      console.log(`✅ ${visitorsList.length} visitantes cargados`);
       setVisitors(visitorsList);
       const insideVisitors = visitorsList.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
+      
+      // Limpiar errores al cargar exitosamente
+      if (error) setError('');
     } catch (err) {
-      console.error('Error fetching visitors:', err);
-      setError('No se pudieron cargar los visitantes');
+      console.error('❌ Error cargando visitantes:', err);
+      setError('No se pudieron cargar los visitantes. Verifique la conexión con el servidor.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Función para manejar la eliminación de visitantes
+  // Función para eliminar visitante - REVISADA Y MEJORADA
   const handleDeleteVisitor = (visitor: Visitor) => {
-    console.log('Preparando eliminación de visitante:', visitor);
+    console.log('🗑️ Preparando eliminación:', visitor);
     setSelectedVisitor(visitor);
     setShowDeleteModal(true);
+    setError(''); // Limpiar errores previos
   };
 
-  // Función para confirmar la eliminación del visitante
+  // Función de eliminación principal - COMPLETAMENTE CORREGIDA
   const confirmDeleteVisitor = async () => {
     if (!selectedVisitor) {
-      console.error('No hay visitante seleccionado para eliminar');
+      console.error('❌ No hay visitante seleccionado');
+      setError('Error: No hay visitante seleccionado para eliminar');
       return;
     }
     
+    const visitorName = `${selectedVisitor.first_name} ${selectedVisitor.last_name}`;
+    const visitorId = selectedVisitor.id;
+    
     try {
       setIsDeletingVisitor(true);
-      console.log('Iniciando eliminación del visitante ID:', selectedVisitor.id);
+      setError('');
+      console.log(`🔄 Eliminando visitante ID ${visitorId}: ${visitorName}`);
       
-      // Eliminar visitante del backend - convertir el ID a string
-      await accessService.deleteVisitor(selectedVisitor.id.toString());
-      console.log('Visitante eliminado exitosamente en el backend');
-      
-      // Actualizar estado local
-      setVisitors(prevVisitors => prevVisitors.filter(v => v.id !== selectedVisitor.id));
-      console.log('Estado local actualizado - visitante eliminado de la lista');
-      
-      // Actualizar visitantes dentro si es necesario
-      if (selectedVisitor.status === 'inside') {
-        setPeopleInside(prevInside => prevInside.filter(v => v.id !== selectedVisitor.id));
+      // PASO 1: Intentar eliminar del backend
+      try {
+        // Usar directamente el número, no string
+        await accessService.deleteVisitor(visitorId);
+        console.log(`✅ Visitante ${visitorId} eliminado del backend`);
+      } catch (apiError: any) {
+        console.error('❌ Error en API de eliminación:', apiError);
+        
+        // Si es 404, el visitante ya no existe en el backend
+        if (apiError?.response?.status === 404) {
+          console.log('ℹ️ Visitante no encontrado en backend, eliminando solo localmente');
+        } else {
+          // Si es otro error, lanzarlo para que se maneje abajo
+          throw apiError;
+        }
       }
       
-      setSuccessMessage(`Visitante ${selectedVisitor.first_name} ${selectedVisitor.last_name} eliminado correctamente`);
+      // PASO 2: Actualizar estado local (siempre, incluso si hubo error 404)
+      console.log('🔄 Actualizando estado local...');
+      const updatedVisitors = visitors.filter(v => v.id !== visitorId);
+      setVisitors(updatedVisitors);
+      
+      // PASO 3: Actualizar visitantes dentro si es necesario
+      if (selectedVisitor.status === 'inside') {
+        const updatedPeopleInside = updatedVisitors.filter(v => v.status === 'inside');
+        setPeopleInside(updatedPeopleInside);
+        
+        // Actualizar contador de aforo
+        const newCount = Math.max(0, occupancyCount - 1);
+        setOccupancyCount(newCount);
+        localStorage.setItem('occupancyCount', newCount.toString());
+        console.log(`📊 Aforo actualizado: ${newCount}`);
+      }
+      
+      // PASO 4: Mostrar éxito y limpiar
+      setSuccessMessage(`✅ Visitante ${visitorName} eliminado correctamente`);
       setShowDeleteModal(false);
       setSelectedVisitor(null);
       
-      // Disparar evento para actualizar otras partes de la aplicación
+      // PASO 5: Notificar otros componentes
       window.dispatchEvent(new Event('visitorDeleted'));
+      console.log(`✅ Eliminación completada: ${visitorName}`);
       
+      // Limpiar mensaje después de 3 segundos
       setTimeout(() => setSuccessMessage(''), 3000);
       
-      // Recargar la lista de visitantes después de eliminar
-      fetchVisitors();
-    } catch (err) {
-      console.error('Error completo al eliminar visitante:', err);
-      setError('Error al eliminar el visitante. Por favor, intente nuevamente.');
+    } catch (error: any) {
+      console.error('❌ Error completo en eliminación:', error);
+      
+      let errorMessage = 'Error inesperado al eliminar el visitante';
+      
+      if (error?.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        switch (status) {
+          case 400:
+            errorMessage = 'Solicitud inválida. Verifique los datos del visitante.';
+            break;
+          case 401:
+            errorMessage = 'No autorizado. Por favor, inicie sesión nuevamente.';
+            break;
+          case 403:
+            errorMessage = 'No tiene permisos para eliminar este visitante.';
+            break;
+          case 404:
+            // Este caso se maneja arriba, pero por si acaso
+            errorMessage = 'Visitante no encontrado en el servidor.';
+            break;
+          case 500:
+            errorMessage = 'Error del servidor. Contacte al administrador del sistema.';
+            break;
+          default:
+            if (data && typeof data === 'string') {
+              errorMessage = data;
+            } else if (data && data.detail) {
+              errorMessage = data.detail;
+            } else {
+              errorMessage = `Error del servidor (${status}). Contacte al administrador.`;
+            }
+        }
+      } else if (error?.message) {
+        errorMessage = `Error de conexión: ${error.message}`;
+      }
+      
+      setError(`❌ ${errorMessage}`);
     } finally {
       setIsDeletingVisitor(false);
     }
   };
 
+  // Función para cancelar eliminación
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setSelectedVisitor(null);
+    setError('');
+  };
+
+  // Función para permitir acceso
   const handleAllowAccess = async (visitor: Visitor) => {
+    if (!visitor) return;
+    
     try {
+      console.log(`✅ Permitiendo acceso a: ${visitor.first_name} ${visitor.last_name}`);
       await accessService.updateVisitorStatus(visitor.id, 'inside');
       
-      // Actualizar listas locales
       const updatedVisitors = visitors.map(v => 
         v.id === visitor.id ? {...v, status: 'inside' as const} : v
       );
@@ -167,19 +249,22 @@ export default function AccessControlPage() {
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       
-      setSuccessMessage(`Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
+      setSuccessMessage(`✅ Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
       
-      // Disparar evento para actualizar otras vistas
       window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
-      console.error('Error allowing access:', err);
-      setError('Error al permitir acceso');
+      console.error('❌ Error permitiendo acceso:', err);
+      setError('Error al permitir acceso al visitante');
     }
   };
 
+  // Función para denegar acceso
   const handleDenyAccess = async (visitor: Visitor) => {
+    if (!visitor) return;
+    
     try {
+      console.log(`❌ Denegando acceso a: ${visitor.first_name} ${visitor.last_name}`);
       await accessService.updateVisitorStatus(visitor.id, 'denied');
       
       const updatedVisitors = visitors.map(v => 
@@ -187,18 +272,22 @@ export default function AccessControlPage() {
       );
       setVisitors(updatedVisitors);
       
-      setSuccessMessage(`Acceso denegado a ${visitor.first_name} ${visitor.last_name}`);
+      setSuccessMessage(`❌ Acceso denegado a ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
       
       window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
-      console.error('Error denying access:', err);
-      setError('Error al denegar acceso');
+      console.error('❌ Error denegando acceso:', err);
+      setError('Error al denegar acceso al visitante');
     }
   };
 
+  // Función para registrar salida
   const handleExitBuilding = async (visitor: Visitor) => {
+    if (!visitor) return;
+    
     try {
+      console.log(`🏃 Registrando salida de: ${visitor.first_name} ${visitor.last_name}`);
       await accessService.updateVisitorStatus(visitor.id, 'outside');
       
       const updatedVisitors = visitors.map(v => 
@@ -209,13 +298,13 @@ export default function AccessControlPage() {
       const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       
-      setSuccessMessage(`Salida registrada para ${visitor.first_name} ${visitor.last_name}`);
+      setSuccessMessage(`🏃 Salida registrada para ${visitor.first_name} ${visitor.last_name}`);
       setTimeout(() => setSuccessMessage(''), 3000);
       
       window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
-      console.error('Error registering exit:', err);
-      setError('Error al registrar salida');
+      console.error('❌ Error registrando salida:', err);
+      setError('Error al registrar la salida del visitante');
     }
   };
 
@@ -232,18 +321,28 @@ export default function AccessControlPage() {
     }
   };
 
+  // Función para forzar recarga manual
+  const forceRefresh = async () => {
+    setError('');
+    setSuccessMessage('');
+    await fetchVisitors();
+    setSuccessMessage('✅ Lista actualizada');
+    setTimeout(() => setSuccessMessage(''), 2000);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900">Control de Acceso</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Control de Acceso - Administración</h1>
           <div className="flex space-x-2">
             <Button 
-              onClick={fetchVisitors}
+              onClick={forceRefresh}
               variant="outline"
               size="sm"
+              disabled={loading}
             >
-              Actualizar
+              {loading ? '🔄' : '🔄'} Actualizar
             </Button>
             <Link 
               href="/access/control/occupancy" 
@@ -257,33 +356,41 @@ export default function AccessControlPage() {
         {error && (
           <Alert variant="error">
             <AlertTitle>Error</AlertTitle>
-            {error.split('\n').map((line, index) => (
-              <p key={index}>{line}</p>
-            ))}
+            <div className="text-sm mt-1">{error}</div>
           </Alert>
         )}
 
         {successMessage && (
           <Alert variant="success">
             <AlertTitle>Éxito</AlertTitle>
-            {successMessage}
+            <div className="text-sm mt-1">{successMessage}</div>
           </Alert>
         )}
 
+        {/* Resumen de aforo */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Control de Aforo</h3>
-            <div className="mt-2 max-w-xl text-sm text-gray-500">
-              <p>Personas dentro del edificio: {peopleInside.length}/{maxOccupancy}</p>
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Estado del Aforo</h3>
+            <div className="mt-2 flex items-center space-x-4">
+              <div className="text-sm text-gray-500">
+                <span className="font-medium">Visitantes dentro:</span> {peopleInside.length}
+              </div>
+              <div className="text-sm text-gray-500">
+                <span className="font-medium">Capacidad máxima:</span> {maxOccupancy}
+              </div>
+              <div className="text-sm text-gray-500">
+                <span className="font-medium">Total visitantes:</span> {visitors.length}
+              </div>
             </div>
           </div>
         </div>
 
+        {/* Lista de visitantes */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
           <div className="px-4 py-5 sm:px-6">
-            <h2 className="text-lg font-medium text-gray-900">Visitantes Registrados</h2>
+            <h2 className="text-lg font-medium text-gray-900">Gestión de Visitantes</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Gestione el acceso de visitantes al edificio.
+              Apruebe, deniegue o elimine visitantes desde este panel de control.
             </p>
           </div>
           
@@ -294,7 +401,7 @@ export default function AccessControlPage() {
           ) : visitors.length > 0 ? (
             <ul className="divide-y divide-gray-200">
               {visitors.map((visitor) => (
-                <li key={visitor.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
+                <li key={`visitor-${visitor.id}`} className="px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-gray-100">
@@ -320,25 +427,29 @@ export default function AccessControlPage() {
                         )}
                       </div>
                       <div className="ml-4">
-                        <div className="flex items-center">
-                          <h3 className="text-sm font-medium text-gray-900">{visitor.first_name} {visitor.last_name}</h3>
-                          <span className="ml-2">{getStatusBadge(visitor.status)}</span>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-sm font-medium text-gray-900">
+                            {visitor.first_name} {visitor.last_name}
+                          </h3>
+                          {getStatusBadge(visitor.status)}
                         </div>
                         <div className="text-sm text-gray-500">
-                          <p>{visitor.visitor_type || (visitor.company ? 'Empresa' : visitor.entry_date ? 'Temporal' : 'Normal')}</p>
+                          <p>ID: {visitor.id} | Tipo: {visitor.visitor_type || 'Normal'}</p>
                           {visitor.company && <p>Empresa: {visitor.company}</p>}
                           {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
                           {visitor.phone && <p>Teléfono: {visitor.phone}</p>}
                         </div>
                       </div>
                     </div>
-                    <div className="flex space-x-2">
+                    
+                    <div className="flex items-center space-x-2">
                       {visitor.status === 'pending' && (
                         <>
                           <Button 
                             onClick={() => handleAllowAccess(visitor)}
                             variant="default"
                             size="sm"
+                            title={`Permitir acceso a ${visitor.first_name} ${visitor.last_name}`}
                           >
                             ✅ Permitir
                           </Button>
@@ -346,6 +457,7 @@ export default function AccessControlPage() {
                             onClick={() => handleDenyAccess(visitor)}
                             variant="destructive"
                             size="sm"
+                            title={`Denegar acceso a ${visitor.first_name} ${visitor.last_name}`}
                           >
                             ❌ Denegar
                           </Button>
@@ -357,8 +469,9 @@ export default function AccessControlPage() {
                           onClick={() => handleExitBuilding(visitor)}
                           variant="secondary"
                           size="sm"
+                          title={`Registrar salida de ${visitor.first_name} ${visitor.last_name}`}
                         >
-                          🏃 Salió del edificio
+                          🏃 Salió
                         </Button>
                       )}
                       
@@ -366,8 +479,9 @@ export default function AccessControlPage() {
                         onClick={() => handleDeleteVisitor(visitor)}
                         variant="outline"
                         size="sm"
-                        className="border-red-300 text-red-700 hover:bg-red-50"
-                        data-visitor-id={visitor.id}
+                        className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
+                        title={`Eliminar visitante ${visitor.first_name} ${visitor.last_name}`}
+                        disabled={isDeletingVisitor}
                       >
                         🗑️ Eliminar
                       </Button>
@@ -378,97 +492,145 @@ export default function AccessControlPage() {
             </ul>
           ) : (
             <div className="px-4 py-6 text-center text-gray-500">
-              No hay visitantes registrados. Por favor, registre visitantes en la sección de Visitantes.
+              <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <p className="text-lg font-medium mb-2">No hay visitantes registrados</p>
+              <p className="text-sm">Los visitantes aparecerán aquí cuando sean registrados por los usuarios.</p>
+              <div className="mt-4">
+                <Link href="/access/visitors/new">
+                  <Button className="bg-primary-600 hover:bg-primary-700 text-white">
+                    Registrar Visitante Manualmente
+                  </Button>
+                </Link>
+              </div>
             </div>
           )}
         </div>
 
         {/* Sección de personas dentro */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
-            <h2 className="text-lg font-medium text-gray-900">Personas Actualmente Dentro</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Visitantes con acceso permitido que se encuentran dentro del edificio.
-            </p>
-          </div>
-          
-          {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loading size="lg" message="Cargando..." />
+        {peopleInside.length > 0 && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6">
+              <h2 className="text-lg font-medium text-gray-900">Visitantes Dentro del Edificio</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Visitantes que actualmente tienen acceso y están dentro del edificio.
+              </p>
             </div>
-          ) : peopleInside.length > 0 ? (
+            
             <ul className="divide-y divide-gray-200">
               {peopleInside.map((visitor) => (
-                <li key={visitor.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
+                <li key={`inside-${visitor.id}`} className="px-4 py-4 sm:px-6 hover:bg-green-50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full overflow-hidden bg-gray-100">
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full overflow-hidden bg-green-100">
                         {visitor.photo ? (
                           <img 
                             src={visitor.photo}
                             alt={`${visitor.first_name} ${visitor.last_name}`}
                             className="h-10 w-10 object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              const parent = (e.target as HTMLImageElement).parentElement;
-                              if (parent) {
-                                parent.innerHTML = `<svg class="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>`;
-                              }
-                            }}
                           />
                         ) : (
-                          <svg className="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-full w-full text-green-600" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                           </svg>
                         )}
                       </div>
                       <div className="ml-4">
-                        <h3 className="text-sm font-medium text-gray-900">{visitor.first_name} {visitor.last_name}</h3>
-                        <div className="text-sm text-gray-500">
-                          <p>{visitor.visitor_type || (visitor.company ? 'Empresa' : visitor.entry_date ? 'Temporal' : 'Normal')}</p>
-                          {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
-                        </div>
+                        <h3 className="text-sm font-medium text-gray-900">
+                          {visitor.first_name} {visitor.last_name}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {visitor.visitor_type || (visitor.company ? 'Empresa' : 'Normal')}
+                          {visitor.apartment_number && ` - Apt. ${visitor.apartment_number}`}
+                        </p>
                       </div>
                     </div>
                     <Button 
                       onClick={() => handleExitBuilding(visitor)}
                       variant="secondary"
                       size="sm"
+                      title={`Registrar salida de ${visitor.first_name} ${visitor.last_name}`}
                     >
-                      🏃 Salió del edificio
+                      🏃 Registrar Salida
                     </Button>
                   </div>
                 </li>
               ))}
             </ul>
-          ) : (
-            <div className="px-4 py-6 text-center text-gray-500">
-              No hay personas dentro del edificio actualmente.
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Modal de confirmación para eliminación */}
+      {/* Modal de confirmación de eliminación */}
       <Modal
         isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        title="Confirmar eliminación"
+        onClose={() => !isDeletingVisitor && cancelDelete()}
+        title="⚠️ Confirmar Eliminación"
         maxWidth="md"
       >
         <div className="py-4">
-          <p className="text-sm text-gray-500">
-            ¿Está seguro de que desea eliminar al visitante {selectedVisitor?.first_name} {selectedVisitor?.last_name}?
-            Esta acción no se puede deshacer.
-          </p>
+          <div className="flex items-center mb-4">
+            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+          </div>
+          
+          <div className="text-center">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Eliminar Visitante
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              ¿Está seguro de que desea eliminar al visitante{' '}
+              <span className="font-semibold text-gray-900">
+                {selectedVisitor?.first_name} {selectedVisitor?.last_name}
+              </span>?
+            </p>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    <strong>Atención:</strong> Esta acción eliminará permanentemente todos los registros asociados con este visitante.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {selectedVisitor?.status === 'inside' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                <p className="text-sm text-blue-700">
+                  ℹ️ <strong>Visitante dentro del edificio:</strong> También se actualizará el contador de aforo.
+                </p>
+              </div>
+            )}
+            
+            {selectedVisitor && (
+              <div className="bg-gray-50 rounded-md p-3 mb-4">
+                <div className="text-sm text-gray-600">
+                  <p><strong>ID:</strong> {selectedVisitor.id}</p>
+                  <p><strong>Estado:</strong> {selectedVisitor.status}</p>
+                  {selectedVisitor.visitor_type && <p><strong>Tipo:</strong> {selectedVisitor.visitor_type}</p>}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex justify-end space-x-3">
+        
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
           <Button
             type="button"
             variant="secondary"
-            onClick={() => setShowDeleteModal(false)}
+            onClick={cancelDelete}
             disabled={isDeletingVisitor}
           >
             Cancelar
@@ -480,7 +642,7 @@ export default function AccessControlPage() {
             isLoading={isDeletingVisitor}
             disabled={isDeletingVisitor}
           >
-            Eliminar
+            {isDeletingVisitor ? 'Eliminando...' : 'Sí, Eliminar Permanentemente'}
           </Button>
         </div>
       </Modal>

@@ -1,4 +1,4 @@
-// components/layout/DashboardLayout.tsx
+// components/layout/DashboardLayout.tsx - Versión actualizada
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +11,7 @@ import Notifications from '../ui/Notifications';
 import { 
   HomeIcon, UsersIcon, ShieldCheckIcon, 
   DocumentTextIcon, TruckIcon, ArrowRightOnRectangleIcon,
-  QrCodeIcon
+  QrCodeIcon, UserIcon
 } from '@heroicons/react/24/outline';
 
 type User = {
@@ -23,6 +23,8 @@ type User = {
     id: number;
     name: string;
   };
+  is_staff?: boolean;
+  is_superuser?: boolean;
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -74,9 +76,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
+  // Check if user is admin
+  const isAdmin = user?.is_staff || user?.is_superuser || user?.role?.name === 'Administrator';
+
   // Elementos de navegación
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Dashboard Admin', href: '/dashboard', icon: HomeIcon },
     { name: 'Control de Acceso', href: '/access', icon: ShieldCheckIcon },
     { name: 'Visitantes', href: '/access/visitors', icon: UsersIcon },
     { name: 'Escanear QR', href: '/access/scan', icon: QrCodeIcon },
@@ -98,6 +103,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-grow flex-col overflow-y-auto border-r border-gray-200 bg-white pt-5">
           <div className="flex flex-shrink-0 items-center px-4">
             <h1 className="text-xl font-bold text-gray-900">VeriAccessSCAE</h1>
+            <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">Admin</span>
           </div>
           <div className="mt-5 flex flex-grow flex-col">
             <nav className="flex-1 space-y-1 px-2 pb-4">
@@ -124,6 +130,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   {item.name}
                 </Link>
               ))}
+              
+              {/* Separador */}
+              <div className="border-t border-gray-200 my-4"></div>
+              
+              {/* Link para volver al dashboard de usuario */}
+              <Link
+                href="/user/dashboard"
+                className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-green-600 hover:bg-green-50 hover:text-green-700"
+              >
+                <UserIcon className="mr-3 h-5 w-5 flex-shrink-0 text-green-400 group-hover:text-green-500" aria-hidden="true" />
+                👤 Mi Dashboard
+              </Link>
             </nav>
           </div>
         </div>
@@ -145,13 +163,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="flex items-center">
                   <Link href="/auth/profile" className="mr-2 text-sm font-medium text-gray-700 hover:text-blue-600">
                     {user?.first_name} {user?.last_name}
-                    <span className="text-xs text-gray-500 ml-1">
-                      ({user?.role?.name || 'Usuario'})
+                    <span className="text-xs text-orange-600 ml-1 font-semibold">
+                      (Administrador)
                     </span>
                   </Link>
                   <button 
                     onClick={handleLogout}
                     className="rounded-full bg-white p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                    title="Cerrar sesión"
                   >
                     <ArrowRightOnRectangleIcon className="h-6 w-6" aria-hidden="true" />
                   </button>
