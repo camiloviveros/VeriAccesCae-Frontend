@@ -1,4 +1,4 @@
-// components/layout/DashboardLayout.tsx - Versión actualizada
+// components/layout/DashboardLayout.tsx - Versión corregida
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +11,7 @@ import Notifications from '../ui/Notifications';
 import { 
   HomeIcon, UsersIcon, ShieldCheckIcon, 
   DocumentTextIcon, TruckIcon, ArrowRightOnRectangleIcon,
-  QrCodeIcon, UserIcon
+  QrCodeIcon
 } from '@heroicons/react/24/outline';
 
 type User = {
@@ -79,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Check if user is admin
   const isAdmin = user?.is_staff || user?.is_superuser || user?.role?.name === 'Administrator';
 
-  // Elementos de navegación
+  // Elementos de navegación (ELIMINADO el enlace al dashboard de usuario)
   const navigation = [
     { name: 'Dashboard Admin', href: '/dashboard', icon: HomeIcon },
     { name: 'Control de Acceso', href: '/access', icon: ShieldCheckIcon },
@@ -130,18 +130,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   {item.name}
                 </Link>
               ))}
-              
-              {/* Separador */}
-              <div className="border-t border-gray-200 my-4"></div>
-              
-              {/* Link para volver al dashboard de usuario */}
-              <Link
-                href="/user/dashboard"
-                className="group flex items-center px-2 py-2 text-sm font-medium rounded-md text-green-600 hover:bg-green-50 hover:text-green-700"
-              >
-                <UserIcon className="mr-3 h-5 w-5 flex-shrink-0 text-green-400 group-hover:text-green-500" aria-hidden="true" />
-                👤 Mi Dashboard
-              </Link>
             </nav>
           </div>
         </div>
