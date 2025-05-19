@@ -1,3 +1,4 @@
+// lib/api/auth.ts - Versión corregida
 import apiClient from './config';
 
 // Definir interfaces para las respuestas de la API
@@ -16,6 +17,7 @@ export interface UserResponse {
   phone?: string;
   is_active?: boolean;
   is_staff?: boolean;
+  is_superuser?: boolean;
   role?: {
     id: number;
     name: string;
@@ -49,6 +51,21 @@ export const login = async (username: string, password: string): Promise<LoginRe
     console.log("Intentando iniciar sesión:", { username });
     const response = await apiClient.post<LoginResponse>('/auth/login/', { username, password });
     console.log("Respuesta de login:", response.data);
+    
+    // Asegurar que la información del usuario esté completa
+    const userData = response.data.user;
+    
+    // Guardar tokens y usuario en localStorage
+    if (response.data.access) {
+      localStorage.setItem('access_token', response.data.access);
+    }
+    if (response.data.refresh) {
+      localStorage.setItem('refresh_token', response.data.refresh);
+    }
+    if (userData) {
+      localStorage.setItem('user', JSON.stringify(userData));
+    }
+    
     return response.data;
   } catch (error) {
     console.error("Error en login:", error);
@@ -59,8 +76,27 @@ export const login = async (username: string, password: string): Promise<LoginRe
 export const register = async (userData: UserData): Promise<LoginResponse> => {
   try {
     console.log("Enviando datos de registro:", userData);
-    const response = await apiClient.post<LoginResponse>('/auth/register/', userData);
+    
+    // Asegurar que los usuarios registrados no sean staff por defecto
+    const registrationData = {
+      ...userData,
+      is_staff: false,
+      is_superuser: false
+    };
+    
+    const response = await apiClient.post<LoginResponse>('/auth/register/', registrationData);
     console.log("Respuesta de registro:", response.data);
+    
+    // Guardar tokens y usuario si se incluyen en la respuesta
+    if (response.data.access && response.data.refresh) {
+      localStorage.setItem('access_token', response.data.access);
+      localStorage.setItem('refresh_token', response.data.refresh);
+      
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+    }
+    
     return response.data;
   } catch (error) {
     console.error("Error en registro:", error);
@@ -70,6 +106,12 @@ export const register = async (userData: UserData): Promise<LoginResponse> => {
 
 export const getCurrentUser = async (): Promise<UserResponse> => {
   const response = await apiClient.get<UserResponse>('/auth/me/');
+  
+  // Actualizar localStorage con la información más reciente
+  if (response.data) {
+    localStorage.setItem('user', JSON.stringify(response.data));
+  }
+  
   return response.data;
 };
 
@@ -80,6 +122,12 @@ export const changePassword = async (data: PasswordData): Promise<{detail: strin
 
 export const updateProfile = async (data: UserData): Promise<UserResponse> => {
   const response = await apiClient.patch<UserResponse>('/auth/me/', data);
+  
+  // Actualizar localStorage
+  if (response.data) {
+    localStorage.setItem('user', JSON.stringify(response.data));
+  }
+  
   return response.data;
 };
 
@@ -107,7 +155,13 @@ export const checkSession = async (): Promise<boolean> => {
   
   try {
     // Intentar hacer una solicitud para verificar que el token es válido
-    await apiClient.get('/auth/me/');
+    const response = await apiClient.get<UserResponse>('/auth/me/');
+    
+    // Actualizar información del usuario en localStorage
+    if (response.data) {
+      localStorage.setItem('user', JSON.stringify(response.data));
+    }
+    
     return true;
   } catch (error) {
     // Si hay un error, la sesión probablemente expiró
@@ -131,7 +185,11 @@ export const checkSession = async (): Promise<boolean> => {
         localStorage.setItem('access_token', response.data.access);
         
         // Intentar nuevamente la solicitud
-        await apiClient.get('/auth/me/');
+        const userResponse = await apiClient.get<UserResponse>('/auth/me/');
+        if (userResponse.data) {
+          localStorage.setItem('user', JSON.stringify(userResponse.data));
+        }
+        
         return true;
       } catch (refreshError) {
         console.error("Token refresh failed:", refreshError);
@@ -145,4 +203,30 @@ export const checkSession = async (): Promise<boolean> => {
     
     return false;
   }
+};
+
+// Función para verificar si el usuario actual es administrador
+export const isCurrentUserAdmin = (): boolean => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return false;
+    
+    const user = JSON.parse(userStr);
+    return Boolean(user.is_staff || user.is_superuser || user.role?.name === 'Administrator');
+  } catch (error) {
+    console.error('Error checking admin status:', error);
+    return false;
+  }
+};
+
+
+export const authService = {
+  login,
+  register,
+  logout,
+  getCurrentUser,
+  changePassword,
+  updateProfile,
+  checkSession,
+  isCurrentUserAdmin
 };

@@ -1,4 +1,4 @@
-// src/app/access/visitors/page.tsx
+// src/app/access/visitors/page.tsx - Página de visitantes corregida
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,6 +7,7 @@ import { accessService } from '../../../../lib/api';
 import { Badge } from '../../../../components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
 import { Loading } from '../../../../components/ui/Loading';
+import { Button } from '../../../../components/ui/Button';
 import Link from 'next/link';
 
 interface Visitor {
@@ -20,7 +21,7 @@ interface Visitor {
   phone?: string;
   visitor_type?: string;
   apartment_number?: string;
-  status?: 'pending' | 'inside' | 'outside' | 'denied';
+  status?: 'pending' | 'approved' | 'inside' | 'outside' | 'denied';
   created_at: string;
   entry_date?: string;
   exit_date?: string;
@@ -108,7 +109,7 @@ export default function VisitorsPage() {
         setFilteredVisitors(visitors.filter(v => v.status === 'pending'));
         break;
       case 'approved':
-        setFilteredVisitors(visitors.filter(v => v.status === 'inside' || v.status === 'outside'));
+        setFilteredVisitors(visitors.filter(v => v.status === 'approved' || v.status === 'inside' || v.status === 'outside'));
         break;
       case 'denied':
         setFilteredVisitors(visitors.filter(v => v.status === 'denied'));
@@ -127,6 +128,8 @@ export default function VisitorsPage() {
         return <Badge className="bg-green-600 text-white">Fuera</Badge>;
       case 'denied':
         return <Badge className="bg-red-500 text-white">Denegado</Badge>;
+      case 'approved':
+        return <Badge className="bg-blue-500 text-white">Aprobado</Badge>;
       default:
         return <Badge className="bg-yellow-500 text-white">Pendiente</Badge>;
     }
@@ -161,7 +164,7 @@ export default function VisitorsPage() {
       case 'pending':
         return visitors.filter(v => v.status === 'pending').length;
       case 'approved':
-        return visitors.filter(v => v.status === 'inside' || v.status === 'outside').length;
+        return visitors.filter(v => v.status === 'approved' || v.status === 'inside' || v.status === 'outside').length;
       case 'denied':
         return visitors.filter(v => v.status === 'denied').length;
       default:
@@ -174,17 +177,30 @@ export default function VisitorsPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Visitantes Registrados</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Gestión de Visitantes</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Vista de solo lectura de todos los visitantes del sistema.
+              Administre todos los visitantes registrados en el sistema.
             </p>
           </div>
           <div className="flex space-x-2">
+            <Button 
+              onClick={fetchVisitors}
+              variant="outline"
+              size="sm"
+            >
+              🔄 Actualizar
+            </Button>
             <Link 
-              href="/access/control" 
+              href="/access/visitors/new" 
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              Control de Acceso
+              ➕ Nuevo Visitante
+            </Link>
+            <Link 
+              href="/access/control" 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              🚪 Control de Acceso
             </Link>
           </div>
         </div>
@@ -399,12 +415,17 @@ export default function VisitorsPage() {
                  selectedFilter === 'approved' ? 'No hay visitantes aprobados' :
                  'No hay visitantes denegados'}
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 mb-4">
                 {selectedFilter === 'all' ? 'Los visitantes aparecerán aquí cuando sean registrados.' : 
                  selectedFilter === 'pending' ? 'Todos los visitantes han sido procesados.' :
                  selectedFilter === 'approved' ? 'Aún no hay visitantes aprobados.' :
                  'Todos los visitantes han sido aprobados o están pendientes.'}
               </p>
+              <Link href="/access/visitors/new">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Registrar Primer Visitante
+                </Button>
+              </Link>
             </div>
           )}
         </div>
@@ -420,11 +441,12 @@ export default function VisitorsPage() {
             <div className="ml-3">
               <h4 className="text-sm font-medium text-blue-800">Información</h4>
               <p className="text-sm text-blue-700 mt-1">
-                Esta página es de solo lectura para revisar todos los visitantes registrados en el sistema. 
-                Para gestionar solicitudes de acceso, aprobar o denegar visitas, utilice la sección 
+                Desde aquí puede gestionar todos los visitantes del sistema. 
+                Para controlar el acceso físico al edificio, utilice la sección
                 <Link href="/access/control" className="font-medium underline hover:text-blue-800">
                   {' '}Control de Acceso
                 </Link>.
+                Los visitantes pueden registrarse desde la interfaz de usuario o ser creados desde administración.
               </p>
             </div>
           </div>

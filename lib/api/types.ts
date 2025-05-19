@@ -1,4 +1,3 @@
-// lib/api/types.ts
 export interface PaginatedResponse<T> {
     count: number;
     next: string | null;
