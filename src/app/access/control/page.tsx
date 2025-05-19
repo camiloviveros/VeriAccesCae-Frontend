@@ -46,9 +46,7 @@ export default function AccessControlPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeletingVisitor, setIsDeletingVisitor] = useState(false);
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
   const [peopleInside, setPeopleInside] = useState<Visitor[]>([]);
   const [occupancyCount, setOccupancyCount] = useState(0);
   const maxOccupancy = 100;
@@ -99,7 +97,6 @@ export default function AccessControlPage() {
       const insideVisitors = visitorsList.filter(v => v.status === 'inside');
       setPeopleInside(insideVisitors);
       
-      // Limpiar errores al cargar exitosamente
       if (error) setError('');
     } catch (err) {
       console.error('❌ Error cargando visitantes:', err);
@@ -109,33 +106,21 @@ export default function AccessControlPage() {
     }
   };
 
-  // Función para eliminar visitante
-  const handleDeleteVisitor = (visitor: Visitor) => {
-    console.log('🗑️ Preparando eliminación:', visitor);
-    setSelectedVisitor(visitor);
-    setShowDeleteModal(true);
+  // Función para eliminar visitante sin confirmación
+  const handleDeleteVisitor = async (visitor: Visitor) => {
+    const visitorName = `${visitor.first_name} ${visitor.last_name}`;
+    const visitorId = visitor.id;
+    
+    // Evitar múltiples eliminaciones simultáneas
+    if (processingIds.has(visitorId)) return;
+    
+    setProcessingIds(prev => new Set(prev).add(visitorId));
     setError('');
-    setIsDeletingVisitor(false);
-  };
-
-  // Función de eliminación principal
-  const confirmDeleteVisitor = async () => {
-    if (!selectedVisitor || isDeletingVisitor) {
-      console.log('❌ No se puede eliminar - Visitante no seleccionado o ya eliminando');
-      return;
-    }
-    
-    const visitorName = `${selectedVisitor.first_name} ${selectedVisitor.last_name}`;
-    const visitorId = selectedVisitor.id;
-    
-    console.log(`🔄 Iniciando eliminación de visitante ID ${visitorId}: ${visitorName}`);
     
     try {
-      setIsDeletingVisitor(true);
-      setError('');
+      console.log(`🗑️ Eliminando visitante ID ${visitorId}: ${visitorName}`);
       
       // Eliminar visitante del backend
-      console.log(`🔄 Eliminando del backend...`);
       await accessService.deleteVisitor(visitorId.toString());
       console.log(`✅ Visitante ${visitorId} eliminado del backend exitosamente`);
       
@@ -148,27 +133,18 @@ export default function AccessControlPage() {
       setPeopleInside(updatedPeopleInside);
       
       // Actualizar contador de aforo si es necesario
-      if (selectedVisitor.status === 'inside') {
+      if (visitor.status === 'inside') {
         const newCount = Math.max(0, occupancyCount - 1);
         setOccupancyCount(newCount);
         localStorage.setItem('occupancyCount', newCount.toString());
         console.log(`📊 Aforo actualizado: ${newCount}`);
       }
       
-      // Cerrar modal y limpiar estado
-      setShowDeleteModal(false);
-      setSelectedVisitor(null);
-      
       // Mostrar mensaje de éxito
       setSuccessMessage(`✅ Visitante ${visitorName} eliminado correctamente`);
       
       // Notificar otros componentes
       window.dispatchEvent(new Event('visitorDeleted'));
-      
-      // Refrescar datos desde el servidor para asegurar sincronización
-      setTimeout(() => {
-        fetchVisitors();
-      }, 500);
       
       // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -184,7 +160,6 @@ export default function AccessControlPage() {
         switch (error.response.status) {
           case 404:
             errorMessage = 'El visitante no fue encontrado. Es posible que ya haya sido eliminado.';
-            // Si es 404, actualizar la lista ya que el visitante no existe
             fetchVisitors();
             break;
           case 403:
@@ -203,22 +178,19 @@ export default function AccessControlPage() {
       setError(errorMessage);
       
     } finally {
-      setIsDeletingVisitor(false);
-    }
-  };
-
-  // Función para cancelar eliminación
-  const cancelDelete = () => {
-    if (!isDeletingVisitor) {
-      setShowDeleteModal(false);
-      setSelectedVisitor(null);
-      setError('');
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(visitorId);
+        return newSet;
+      });
     }
   };
 
   // Función para permitir acceso
   const handleAllowAccess = async (visitor: Visitor) => {
-    if (!visitor) return;
+    if (!visitor || processingIds.has(visitor.id)) return;
+    
+    setProcessingIds(prev => new Set(prev).add(visitor.id));
     
     try {
       console.log(`✅ Permitiendo acceso a: ${visitor.first_name} ${visitor.last_name}`);
@@ -239,12 +211,20 @@ export default function AccessControlPage() {
     } catch (err) {
       console.error('❌ Error permitiendo acceso:', err);
       setError('Error al permitir acceso al visitante');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(visitor.id);
+        return newSet;
+      });
     }
   };
 
   // Función para denegar acceso
   const handleDenyAccess = async (visitor: Visitor) => {
-    if (!visitor) return;
+    if (!visitor || processingIds.has(visitor.id)) return;
+    
+    setProcessingIds(prev => new Set(prev).add(visitor.id));
     
     try {
       console.log(`❌ Denegando acceso a: ${visitor.first_name} ${visitor.last_name}`);
@@ -262,12 +242,20 @@ export default function AccessControlPage() {
     } catch (err) {
       console.error('❌ Error denegando acceso:', err);
       setError('Error al denegar acceso al visitante');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(visitor.id);
+        return newSet;
+      });
     }
   };
 
   // Función para registrar salida
   const handleExitBuilding = async (visitor: Visitor) => {
-    if (!visitor) return;
+    if (!visitor || processingIds.has(visitor.id)) return;
+    
+    setProcessingIds(prev => new Set(prev).add(visitor.id));
     
     try {
       console.log(`🏃 Registrando salida de: ${visitor.first_name} ${visitor.last_name}`);
@@ -288,19 +276,25 @@ export default function AccessControlPage() {
     } catch (err) {
       console.error('❌ Error registrando salida:', err);
       setError('Error al registrar la salida del visitante');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(visitor.id);
+        return newSet;
+      });
     }
   };
 
   const getStatusBadge = (status?: string) => {
     switch(status) {
       case 'inside':
-        return <Badge variant="success">Dentro</Badge>;
+        return <Badge variant="success" className="bg-green-500 text-white">Dentro</Badge>;
       case 'outside':
-        return <Badge variant="secondary">Fuera</Badge>;
+        return <Badge variant="secondary" className="bg-gray-500 text-white">Fuera</Badge>;
       case 'denied':
-        return <Badge variant="destructive">Denegado</Badge>;
+        return <Badge variant="destructive" className="bg-red-500 text-white">Denegado</Badge>;
       default:
-        return <Badge variant="info">Pendiente</Badge>;
+        return <Badge variant="info" className="bg-blue-500 text-white">Pendiente</Badge>;
     }
   };
 
@@ -324,12 +318,13 @@ export default function AccessControlPage() {
               variant="outline"
               size="sm"
               disabled={loading}
+              className="border-blue-500 text-blue-600 hover:bg-blue-50"
             >
               {loading ? '🔄' : '🔄'} Actualizar
             </Button>
             <Link 
               href="/access/control/occupancy" 
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Control de Aforo
             </Link>
@@ -337,31 +332,31 @@ export default function AccessControlPage() {
         </div>
 
         {error && (
-          <Alert variant="error">
-            <AlertTitle>Error</AlertTitle>
-            <div className="text-sm mt-1">{error}</div>
+          <Alert variant="error" className="border-red-500 bg-red-50">
+            <AlertTitle className="text-red-800">Error</AlertTitle>
+            <div className="text-sm mt-1 text-red-700">{error}</div>
           </Alert>
         )}
 
         {successMessage && (
-          <Alert variant="success">
-            <AlertTitle>Éxito</AlertTitle>
-            <div className="text-sm mt-1">{successMessage}</div>
+          <Alert variant="success" className="border-green-500 bg-green-50">
+            <AlertTitle className="text-green-800">Éxito</AlertTitle>
+            <div className="text-sm mt-1 text-green-700">{successMessage}</div>
           </Alert>
         )}
 
         {/* Resumen de aforo */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Estado del Aforo</h3>
             <div className="mt-2 flex items-center space-x-4">
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-700">
                 <span className="font-medium">Visitantes dentro:</span> {peopleInside.length}
               </div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-700">
                 <span className="font-medium">Capacidad máxima:</span> {maxOccupancy}
               </div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-700">
                 <span className="font-medium">Total visitantes:</span> {visitors.length}
               </div>
             </div>
@@ -369,10 +364,10 @@ export default function AccessControlPage() {
         </div>
 
         {/* Lista de visitantes */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
+        <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
+          <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">Gestión de Visitantes</h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-600">
               Apruebe, deniegue o elimine visitantes desde este panel de control.
             </p>
           </div>
@@ -397,14 +392,14 @@ export default function AccessControlPage() {
                               (e.target as HTMLImageElement).style.display = 'none';
                               const parent = (e.target as HTMLImageElement).parentElement;
                               if (parent) {
-                                parent.innerHTML = `<svg class="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                                parent.innerHTML = `<svg class="h-full w-full text-gray-400" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                                 </svg>`;
                               }
                             }}
                           />
                         ) : (
-                          <svg className="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-full w-full text-gray-400" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                           </svg>
                         )}
@@ -416,11 +411,20 @@ export default function AccessControlPage() {
                           </h3>
                           {getStatusBadge(visitor.status)}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          <p>ID: {visitor.id} | Tipo: {visitor.visitor_type || 'Normal'}</p>
+                        <div className="text-sm text-gray-600">
+                          <p>
+                            ID: {visitor.id} | 
+                            Tipo: {visitor.visitor_type ? 
+                              (visitor.visitor_type === 'temporary' ? 'Temporal' : 
+                               visitor.visitor_type === 'business' ? 'Empresarial' : 'Regular') 
+                              : 'Regular'}
+                          </p>
                           {visitor.company && <p>Empresa: {visitor.company}</p>}
                           {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
                           {visitor.phone && <p>Teléfono: {visitor.phone}</p>}
+                          {visitor.entry_date && visitor.exit_date && (
+                            <p>Válido: {new Date(visitor.entry_date).toLocaleDateString()} - {new Date(visitor.exit_date).toLocaleDateString()}</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -432,17 +436,21 @@ export default function AccessControlPage() {
                             onClick={() => handleAllowAccess(visitor)}
                             variant="default"
                             size="sm"
+                            disabled={processingIds.has(visitor.id)}
+                            className="bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400"
                             title={`Permitir acceso a ${visitor.first_name} ${visitor.last_name}`}
                           >
-                            ✅ Permitir
+                            {processingIds.has(visitor.id) ? '⏳' : '✅'} Permitir
                           </Button>
                           <Button 
                             onClick={() => handleDenyAccess(visitor)}
                             variant="destructive"
                             size="sm"
+                            disabled={processingIds.has(visitor.id)}
+                            className="bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400"
                             title={`Denegar acceso a ${visitor.first_name} ${visitor.last_name}`}
                           >
-                            ❌ Denegar
+                            {processingIds.has(visitor.id) ? '⏳' : '❌'} Denegar
                           </Button>
                         </>
                       )}
@@ -452,9 +460,11 @@ export default function AccessControlPage() {
                           onClick={() => handleExitBuilding(visitor)}
                           variant="secondary"
                           size="sm"
+                          disabled={processingIds.has(visitor.id)}
+                          className="bg-yellow-500 text-white hover:bg-yellow-600 disabled:bg-gray-400"
                           title={`Registrar salida de ${visitor.first_name} ${visitor.last_name}`}
                         >
-                          🏃 Salió
+                          {processingIds.has(visitor.id) ? '⏳' : '🏃'} Salió
                         </Button>
                       )}
                       
@@ -462,11 +472,11 @@ export default function AccessControlPage() {
                         onClick={() => handleDeleteVisitor(visitor)}
                         variant="outline"
                         size="sm"
-                        className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
+                        className="border-red-400 text-red-600 hover:bg-red-50 hover:border-red-500 disabled:bg-gray-200 disabled:border-gray-300 disabled:text-gray-400"
                         title={`Eliminar visitante ${visitor.first_name} ${visitor.last_name}`}
-                        disabled={isDeletingVisitor}
+                        disabled={processingIds.has(visitor.id)}
                       >
-                        🗑️ Eliminar
+                        {processingIds.has(visitor.id) ? '⏳' : '🗑️'} Eliminar
                       </Button>
                     </div>
                   </div>
@@ -474,31 +484,24 @@ export default function AccessControlPage() {
               ))}
             </ul>
           ) : (
-            <div className="px-4 py-6 text-center text-gray-500">
+            <div className="px-4 py-6 text-center">
               <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              <p className="text-lg font-medium mb-2">No hay visitantes registrados</p>
-              <p className="text-sm">Los visitantes aparecerán aquí cuando sean registrados por los usuarios.</p>
-              <div className="mt-4">
-                <Link href="/access/visitors/new">
-                  <Button className="bg-primary-600 hover:bg-primary-700 text-white">
-                    Registrar Visitante Manualmente
-                  </Button>
-                </Link>
-              </div>
+              <p className="text-lg font-medium mb-2 text-gray-700">No hay visitantes registrados</p>
+              <p className="text-sm text-gray-600">Los visitantes aparecerán aquí cuando sean registrados por los usuarios.</p>
             </div>
           )}
         </div>
 
         {/* Sección de personas dentro */}
         {peopleInside.length > 0 && (
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div className="px-4 py-5 sm:px-6">
-              <h2 className="text-lg font-medium text-gray-900">Visitantes Dentro del Edificio</h2>
-              <p className="mt-1 text-sm text-gray-500">
+          <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
+            <div className="px-4 py-5 sm:px-6 bg-green-50 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-green-900">Visitantes Dentro del Edificio</h2>
+              <p className="mt-1 text-sm text-green-700">
                 Visitantes que actualmente tienen acceso y están dentro del edificio.
               </p>
             </div>
@@ -525,8 +528,11 @@ export default function AccessControlPage() {
                         <h3 className="text-sm font-medium text-gray-900">
                           {visitor.first_name} {visitor.last_name}
                         </h3>
-                        <p className="text-sm text-gray-500">
-                          {visitor.visitor_type || (visitor.company ? 'Empresa' : 'Normal')}
+                        <p className="text-sm text-gray-600">
+                          {visitor.visitor_type ? 
+                            (visitor.visitor_type === 'temporary' ? 'Temporal' : 
+                             visitor.visitor_type === 'business' ? 'Empresarial' : 'Regular') 
+                            : (visitor.company ? 'Empresa' : 'Normal')}
                           {visitor.apartment_number && ` - Apt. ${visitor.apartment_number}`}
                         </p>
                       </div>
@@ -535,9 +541,11 @@ export default function AccessControlPage() {
                       onClick={() => handleExitBuilding(visitor)}
                       variant="secondary"
                       size="sm"
+                      disabled={processingIds.has(visitor.id)}
+                      className="bg-yellow-500 text-white hover:bg-yellow-600 disabled:bg-gray-400"
                       title={`Registrar salida de ${visitor.first_name} ${visitor.last_name}`}
                     >
-                      🏃 Registrar Salida
+                      {processingIds.has(visitor.id) ? '⏳' : '🏃'} Registrar Salida
                     </Button>
                   </div>
                 </li>
@@ -546,141 +554,6 @@ export default function AccessControlPage() {
           </div>
         )}
       </div>
-
-      {/* Modal de confirmación de eliminación - COMPLETAMENTE PERSONALIZADO */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Overlay fijo - semi-transparente */}
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-60 transition-opacity duration-200"
-            onClick={!isDeletingVisitor ? cancelDelete : undefined}
-          />
-          
-          {/* Contenedor modal centrado */}
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all duration-200 scale-100">
-              {/* Header del modal */}
-              <div className="bg-red-50 px-6 py-4 border-b border-red-100 rounded-t-xl">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
-                    <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </div>
-                  <div className="ml-4">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Eliminar Visitante
-                    </h3>
-                    <p className="text-sm text-red-600">
-                      Esta acción no se puede deshacer
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contenido del modal */}
-              <div className="px-6 py-4">
-                <div className="mb-4">
-                  <p className="text-sm text-gray-600 mb-3">
-                    ¿Está completamente seguro de que desea eliminar al visitante?
-                  </p>
-                  
-                  {/* Info del visitante */}
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="flex items-center">
-                      <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                        <span className="text-blue-600 font-semibold text-lg">
-                          {selectedVisitor?.first_name?.charAt(0)}{selectedVisitor?.last_name?.charAt(0)}
-                        </span>
-                      </div>
-                      <div className="ml-3">
-                        <p className="font-semibold text-gray-900">
-                          {selectedVisitor?.first_name} {selectedVisitor?.last_name}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          ID: {selectedVisitor?.id} • Estado: {selectedVisitor?.status || 'Pendiente'}
-                        </p>
-                        {selectedVisitor?.visitor_type && (
-                          <p className="text-sm text-gray-600">
-                            Tipo: {selectedVisitor.visitor_type}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Advertencia sobre visitante dentro */}
-                {selectedVisitor?.status === 'inside' && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm text-blue-700">
-                          <span className="font-medium">Nota:</span> Este visitante está actualmente dentro del edificio. 
-                          Su eliminación actualizará automáticamente el contador de aforo.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Advertencia general */}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm text-yellow-700">
-                        Se eliminarán permanentemente todos los registros asociados con este visitante.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer con botones */}
-              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 rounded-b-xl">
-                <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 space-y-3 space-y-reverse sm:space-y-0">
-                  <button
-                    type="button"
-                    onClick={cancelDelete}
-                    disabled={isDeletingVisitor}
-                    className="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmDeleteVisitor}
-                    disabled={isDeletingVisitor}
-                    className="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isDeletingVisitor ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Eliminando...
-                      </>
-                    ) : (
-                      'Eliminar Permanentemente'
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   );
 }

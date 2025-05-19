@@ -1,4 +1,3 @@
-// src/app/user/dashboard/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,6 +16,12 @@ interface Visit {
   status?: string;
   created_at: string;
   visitor_type?: string;
+  apartment_number?: string;
+  company?: string;
+  entry_date?: string;
+  exit_date?: string;
+  id_number?: string;
+  phone?: string;
 }
 
 interface User {
@@ -35,6 +40,7 @@ export default function UserDashboardPage() {
   const [myVisits, setMyVisits] = useState<Visit[]>([]);
   const [pendingVisits, setPendingVisits] = useState<Visit[]>([]);
   const [approvedVisits, setApprovedVisits] = useState<Visit[]>([]);
+  const [deniedVisits, setDeniedVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [emergencyMessage, setEmergencyMessage] = useState('');
@@ -60,6 +66,19 @@ export default function UserDashboardPage() {
 
     fetchMyVisits();
     fetchCurrentUser();
+
+    // Listen for changes
+    const handleVisitChange = () => {
+      fetchMyVisits();
+    };
+
+    window.addEventListener('visitorStatusChanged', handleVisitChange);
+    window.addEventListener('visitorDeleted', handleVisitChange);
+    
+    return () => {
+      window.removeEventListener('visitorStatusChanged', handleVisitChange);
+      window.removeEventListener('visitorDeleted', handleVisitChange);
+    };
   }, [router]);
 
   const fetchCurrentUser = async () => {
@@ -93,7 +112,8 @@ export default function UserDashboardPage() {
       
       setMyVisits(visitsList);
       setPendingVisits(visitsList.filter(v => v.status === 'pending'));
-      setApprovedVisits(visitsList.filter(v => v.status === 'inside'));
+      setApprovedVisits(visitsList.filter(v => v.status === 'inside' || v.status === 'outside'));
+      setDeniedVisits(visitsList.filter(v => v.status === 'denied'));
     } catch (err) {
       console.error('Error fetching visits:', err);
       setError('No se pudieron cargar las visitas');
@@ -129,13 +149,37 @@ export default function UserDashboardPage() {
   const getStatusBadge = (status?: string) => {
     switch(status) {
       case 'inside':
-        return <Badge variant="success">Dentro</Badge>;
+        return <Badge className="bg-green-600 text-white">Aprobado - Dentro</Badge>;
       case 'outside':
-        return <Badge variant="secondary">Fuera</Badge>;
+        return <Badge className="bg-green-600 text-white">Aprobado - Fuera</Badge>;
       case 'denied':
-        return <Badge variant="destructive">Denegado</Badge>;
+        return <Badge className="bg-red-600 text-white">Denegado</Badge>;
       default:
-        return <Badge variant="info">Pendiente</Badge>;
+        return <Badge className="bg-yellow-600 text-white">Pendiente</Badge>;
+    }
+  };
+
+  const getVisitTypeName = (type?: string) => {
+    switch(type) {
+      case 'temporary':
+        return 'Temporal';
+      case 'business':
+        return 'Empresarial';
+      case 'regular':
+        return 'Normal';
+      default:
+        return 'Normal';
+    }
+  };
+
+  const getVisitTypeIcon = (type?: string) => {
+    switch(type) {
+      case 'temporary':
+        return '⏰';
+      case 'business':
+        return '🏢';
+      default:
+        return '🏠';
     }
   };
 
@@ -159,7 +203,7 @@ export default function UserDashboardPage() {
                 <Link href="/user/visits" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Mis Visitas
                 </Link>
-                <Link href="/user/create-qr" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <Link href="/user/create-visit" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Registrar Visita
                 </Link>
                 {isAdmin && (
@@ -204,8 +248,9 @@ export default function UserDashboardPage() {
           </div>
           
           {error && (
-            <Alert variant="error" className="mb-6">
-              <AlertTitle>{error}</AlertTitle>
+            <Alert variant="error" className="mb-6 border-red-500 bg-red-50">
+              <AlertTitle className="text-red-800">Error</AlertTitle>
+              <p className="text-red-700 text-sm mt-1">{error}</p>
             </Alert>
           )}
           
@@ -213,21 +258,21 @@ export default function UserDashboardPage() {
             {/* Quick Actions Card */}
             <Card className="bg-white shadow-lg border border-gray-200">
               <CardHeader className="bg-gray-50 border-b border-gray-200">
-                <CardTitle>Acciones Rápidas</CardTitle>
+                <CardTitle className="text-gray-900">Acciones Rápidas</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-4">
                   <Button 
-                    onClick={() => router.push('/user/create-qr')}
+                    onClick={() => router.push('/user/create-visit')}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    Registrar Nueva Visita
+                    📋 Registrar Nueva Visita
                   </Button>
                   <Button 
                     onClick={() => router.push('/user/visits')}
                     className="w-full bg-gray-700 hover:bg-gray-800 text-white"
                   >
-                    Ver Mis Visitas
+                    👥 Ver Mis Visitas
                   </Button>
                   {isAdmin && (
                     <Button 
@@ -244,7 +289,7 @@ export default function UserDashboardPage() {
             {/* Emergency Alert Card */}
             <Card className="bg-white shadow-lg border border-gray-200">
               <CardHeader className="bg-gray-50 border-b border-gray-200">
-                <CardTitle>Enviar Alerta</CardTitle>
+                <CardTitle className="text-gray-900">Enviar Alerta</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-4">
@@ -279,14 +324,88 @@ export default function UserDashboardPage() {
                     onClick={submitEmergencyAlert}
                     className="w-full bg-red-600 hover:bg-red-700 text-white"
                   >
-                    Enviar Alerta
+                    🚨 Enviar Alerta
                   </Button>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Rest of the component remains the same */}
+          {/* Estadísticas de visitas */}
+          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-4">
+            <Card className="bg-white shadow-lg border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600 text-xl font-bold">{myVisits.length}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Total de Visitas</dt>
+                      <dd className="text-lg font-medium text-gray-900">{myVisits.length}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow-lg border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                      <span className="text-yellow-600 text-xl font-bold">{pendingVisits.length}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Visitas Pendientes</dt>
+                      <dd className="text-lg font-medium text-gray-900">{pendingVisits.length}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow-lg border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-green-600 text-xl font-bold">{approvedVisits.length}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Visitas Aprobadas</dt>
+                      <dd className="text-lg font-medium text-gray-900">{approvedVisits.length}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow-lg border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-red-600 text-xl font-bold">{deniedVisits.length}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Visitas Denegadas</dt>
+                      <dd className="text-lg font-medium text-gray-900">{deniedVisits.length}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Visitas Pendientes */}
           <div className="mt-8">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Visitas Pendientes de Aprobación</h2>
@@ -297,29 +416,39 @@ export default function UserDashboardPage() {
                 </div>
               ) : pendingVisits.length > 0 ? (
                 <ul className="divide-y divide-gray-200">
-                  {pendingVisits.slice(0, 3).map((visit) => (
+                  {pendingVisits.slice(0, 5).map((visit) => (
                     <li key={visit.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-blue-500 font-medium">
-                                {visit.first_name.charAt(0)}{visit.last_name.charAt(0)}
+                            <div className="flex-shrink-0 h-10 w-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                              <span className="text-2xl">
+                                {getVisitTypeIcon(visit.visitor_type)}
                               </span>
                             </div>
                             <div className="ml-4">
                               <p className="text-sm font-medium text-gray-900">
                                 {visit.first_name} {visit.last_name}
                               </p>
-                              <p className="text-xs text-gray-500">
-                                Registrado: {new Date(visit.created_at).toLocaleDateString()}
-                              </p>
+                              <div className="flex items-center space-x-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {getVisitTypeName(visit.visitor_type)}
+                                </span>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(visit.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              {visit.entry_date && visit.exit_date && (
+                                <p className="text-xs text-gray-500">
+                                  Válido: {new Date(visit.entry_date).toLocaleDateString()} - {new Date(visit.exit_date).toLocaleDateString()}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
-                        <div>
+                        <div className="flex flex-col items-end">
                           {getStatusBadge(visit.status)}
-                          <p className="text-xs text-gray-500 mt-1 text-center">En revisión</p>
+                          <p className="text-xs text-gray-500 mt-1">En revisión</p>
                         </div>
                       </div>
                     </li>
@@ -327,17 +456,23 @@ export default function UserDashboardPage() {
                 </ul>
               ) : (
                 <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
-                  No tienes visitas pendientes de aprobación.
+                  <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-medium mb-2 text-gray-700">No tienes visitas pendientes</p>
+                  <p className="text-sm text-gray-600">Las visitas aparecerán aquí cuando las registres.</p>
                 </div>
               )}
-              {pendingVisits.length > 3 && (
+              {pendingVisits.length > 5 && (
                 <div className="bg-gray-50 px-4 py-3 text-right sm:px-6 border-t border-gray-200">
                   <Button
                     variant="outline"
                     onClick={() => router.push('/user/visits')}
-                    className="text-blue-600"
+                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
                   >
-                    Ver Todos
+                    Ver Todas las Visitas
                   </Button>
                 </div>
               )}
@@ -346,7 +481,7 @@ export default function UserDashboardPage() {
 
           {/* Visitas Activas */}
           <div className="mt-8">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Visitas Activas</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Visitas Aprobadas (QR Disponible)</h2>
             <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
               {loading ? (
                 <div className="p-4 flex items-center justify-center">
@@ -354,43 +489,62 @@ export default function UserDashboardPage() {
                 </div>
               ) : approvedVisits.length > 0 ? (
                 <ul className="divide-y divide-gray-200">
-                  {approvedVisits.slice(0, 3).map((visit) => (
-                    <li key={visit.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
+                  {approvedVisits.slice(0, 5).map((visit) => (
+                    <li key={visit.id} className="px-4 py-4 sm:px-6 hover:bg-green-50">
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
-                              <span className="text-green-500 font-medium">
-                                {visit.first_name.charAt(0)}{visit.last_name.charAt(0)}
+                              <span className="text-2xl">
+                                {getVisitTypeIcon(visit.visitor_type)}
                               </span>
                             </div>
                             <div className="ml-4">
                               <p className="text-sm font-medium text-gray-900">
                                 {visit.first_name} {visit.last_name}
                               </p>
-                              <p className="text-xs text-gray-500">
-                                Registrado: {new Date(visit.created_at).toLocaleDateString()}
-                              </p>
+                              <div className="flex items-center space-x-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {getVisitTypeName(visit.visitor_type)}
+                                </span>
+                                <p className="text-xs text-gray-600">
+                                  {new Date(visit.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              {visit.entry_date && visit.exit_date && (
+                                <p className="text-xs text-gray-600">
+                                  Válido: {new Date(visit.entry_date).toLocaleDateString()} - {new Date(visit.exit_date).toLocaleDateString()}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/user/visits/${visit.id}/qr`)}
-                          className="text-blue-600"
-                        >
-                          Ver QR
-                        </Button>
+                        <div className="flex items-center space-x-2">
+                          {getStatusBadge(visit.status)}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => router.push(`/user/visits/${visit.id}/qr`)}
+                            className="text-green-600 border-green-200 hover:bg-green-50"
+                          >
+                            📱 Ver QR
+                          </Button>
+                        </div>
                       </div>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
-                  No tienes visitas activas actualmente.
+                  <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-medium mb-2 text-gray-700">No tienes visitas aprobadas</p>
+                  <p className="text-sm text-gray-600">Las visitas aparecerán aquí cuando sean aprobadas por administración.</p>
                   <div className="mt-3">
-                    <Link href="/user/create-qr">
+                    <Link href="/user/create-visit">
                       <Button className="bg-blue-600 hover:bg-blue-700 text-white">
                         Registrar Primera Visita
                       </Button>
@@ -398,14 +552,14 @@ export default function UserDashboardPage() {
                   </div>
                 </div>
               )}
-              {approvedVisits.length > 3 && (
+              {approvedVisits.length > 5 && (
                 <div className="bg-gray-50 px-4 py-3 text-right sm:px-6 border-t border-gray-200">
                   <Button
                     variant="outline"
                     onClick={() => router.push('/user/visits')}
-                    className="text-blue-600"
+                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
                   >
-                    Ver Todos
+                    Ver Todas las Visitas
                   </Button>
                 </div>
               )}
