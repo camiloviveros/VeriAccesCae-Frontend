@@ -1,4 +1,4 @@
-// src/app/user/create-qr/page.tsx
+// src/app/user/visits/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,31 +7,33 @@ import Link from 'next/link';
 import { accessService } from '../../../../lib/api';
 import { Button } from '../../../../components/ui/Button';
 import { Alert, AlertTitle } from '../../../../components/ui/Alert';
+import { Badge } from '../../../../components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
 
-export default function CreateQRPage() {
+interface Visit {
+  id: number;
+  first_name: string;
+  last_name: string;
+  status?: 'pending' | 'inside' | 'outside' | 'denied';
+  created_at: string;
+  visitor_type?: string;
+  apartment_number?: string;
+  company?: string;
+  entry_date?: string;
+  exit_date?: string;
+  id_number?: string;
+  phone?: string;
+}
+
+type FilterType = 'all' | 'pending' | 'approved' | 'denied';
+
+export default function MyVisitsPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    id_number: '',
-    phone: '',
-    email: '',
-    company: '',
-    visitor_type: 'regular',
-    purpose: 'Visita',
-    valid_from: '',
-    valid_to: '',
-    apartment_number: '',
-  });
-  const [qrImage, setQrImage] = useState<string | null>(null);
-  const [accessId, setAccessId] = useState<number | null>(null);
-  const [visitorId, setVisitorId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [filteredVisits, setFilteredVisits] = useState<Visit[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [showBusinessFields, setShowBusinessFields] = useState(false);
-  const [showApartmentField, setShowApartmentField] = useState(true);
 
   useEffect(() => {
     // Check if user is logged in
@@ -41,130 +43,128 @@ export default function CreateQRPage() {
       return;
     }
 
-    // Initialize dates
-    const now = new Date();
-    const inOneDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    fetchMyVisits();
+
+    // Listen for changes
+    const handleVisitChange = () => {
+      fetchMyVisits();
+    };
+
+    window.addEventListener('visitorStatusChanged', handleVisitChange);
+    window.addEventListener('visitorDeleted', handleVisitChange);
     
-    setFormData(prev => ({
-      ...prev,
-      valid_from: now.toISOString().slice(0, 16),
-      valid_to: inOneDay.toISOString().slice(0, 16)
-    }));
+    return () => {
+      window.removeEventListener('visitorStatusChanged', handleVisitChange);
+      window.removeEventListener('visitorDeleted', handleVisitChange);
+    };
   }, [router]);
 
-  // Handle visitor type change
+  // Filter visits when filter changes
   useEffect(() => {
-    setShowBusinessFields(formData.visitor_type === 'business');
-    setShowApartmentField(formData.visitor_type === 'regular');
-  }, [formData.visitor_type]);
+    filterVisits();
+  }, [visits, selectedFilter]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess('');
-    
+  const fetchMyVisits = async () => {
     try {
-      // Create visitor data object
-      const visitorData: any = {
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        id_number: formData.id_number,
-        phone: formData.phone,
-        email: formData.email,
-        visitor_type: formData.visitor_type,
-        status: 'pending',
-      };
+      setLoading(true);
+      const response = await accessService.getVisitors();
       
-      // Add conditional fields based on visitor type
-      if (formData.visitor_type === 'business') {
-        visitorData.company = formData.company;
+      let visitsList: Visit[] = [];
+      if (Array.isArray(response)) {
+        visitsList = response;
+      } else if (response?.results && Array.isArray(response.results)) {
+        visitsList = response.results;
+      } else if (response && typeof response === 'object') {
+        visitsList = Object.values(response).filter(val => 
+          typeof val === 'object' && val !== null && 'id' in val
+        ) as Visit[];
       }
       
-      if (formData.visitor_type === 'regular') {
-        visitorData.apartment_number = formData.apartment_number;
-      }
+      // Sort by creation date, newest first
+      visitsList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
-      if (formData.visitor_type === 'temporary') {
-        visitorData.entry_date = formData.valid_from;
-        visitorData.exit_date = formData.valid_to;
-      }
-      
-      // First create the visitor
-      const visitorResponse = await accessService.createVisitor(visitorData);
-      console.log("Visitor created:", visitorResponse);
-      
-      if (!visitorResponse || !visitorResponse.id) {
-        throw new Error("No se recibió un ID de visitante válido");
-      }
-      
-      setVisitorId(visitorResponse.id);
-      
-      // Then create access with QR
-      const accessData = {
-        visitor: visitorResponse.id,
-        purpose: formData.purpose,
-        valid_from: formData.valid_from,
-        valid_to: formData.valid_to,
-        access_zones: [1] // Default access zone
-      };
-      
-      console.log("Creating visitor access with data:", accessData);
-      const accessResponse = await accessService.createVisitorAccess(accessData);
-      console.log("Access created:", accessResponse);
-      
-      if (!accessResponse || !accessResponse.id) {
-        throw new Error("No se recibió un ID de acceso válido");
-      }
-      
-      setAccessId(accessResponse.id);
-      
-      // Get QR image
-      const qrResponse = await accessService.getQRCode(accessResponse.id);
-      setQrImage(qrResponse.qr_code_image);
-      
-      setSuccess('Visita registrada exitosamente. El QR estará disponible cuando el administrador apruebe la solicitud.');
-      
-      // Clear form
-      setTimeout(() => {
-        router.push('/user/visits');
-      }, 3000);
-      
-    } catch (err: any) {
-      console.error('Error creating QR:', err);
-      let errorMsg = "Error al registrar la visita";
-      
-      if (err.response?.data) {
-        if (typeof err.response.data === 'string') {
-          errorMsg = err.response.data;
-        } else if (err.response.data.detail) {
-          errorMsg = err.response.data.detail;
-        } else if (typeof err.response.data === 'object') {
-          // Format validation errors
-          errorMsg = Object.entries(err.response.data)
-            .map(([field, message]) => `${field}: ${message}`)
-            .join(', ');
-        }
-      } else if (err.message) {
-        errorMsg = err.message;
-      }
-      
-      setError(errorMsg);
+      setVisits(visitsList);
+    } catch (err) {
+      console.error('Error fetching visits:', err);
+      setError('No se pudieron cargar las visitas');
     } finally {
       setLoading(false);
     }
   };
 
+  const filterVisits = () => {
+    switch (selectedFilter) {
+      case 'pending':
+        setFilteredVisits(visits.filter(v => v.status === 'pending'));
+        break;
+      case 'approved':
+        setFilteredVisits(visits.filter(v => v.status === 'inside' || v.status === 'outside'));
+        break;
+      case 'denied':
+        setFilteredVisits(visits.filter(v => v.status === 'denied'));
+        break;
+      default:
+        setFilteredVisits(visits);
+        break;
+    }
+  };
+
+  const getStatusBadge = (status?: string) => {
+    switch(status) {
+      case 'inside':
+        return <Badge className="bg-green-500 text-white">Aprobado - Dentro</Badge>;
+      case 'outside':
+        return <Badge className="bg-green-600 text-white">Aprobado - Fuera</Badge>;
+      case 'denied':
+        return <Badge className="bg-red-500 text-white">Denegado</Badge>;
+      default:
+        return <Badge className="bg-yellow-500 text-white">Pendiente</Badge>;
+    }
+  };
+
+  const getVisitTypeName = (type?: string) => {
+    switch(type) {
+      case 'temporary':
+        return 'Temporal';
+      case 'business':
+        return 'Empresarial';
+      case 'regular':
+        return 'Normal';
+      default:
+        return 'Normal';
+    }
+  };
+
+  const getVisitTypeIcon = (type?: string) => {
+    switch(type) {
+      case 'temporary':
+        return '⏰';
+      case 'business':
+        return '🏢';
+      default:
+        return '🏠';
+    }
+  };
+
+  const getStatusCount = (status: FilterType) => {
+    switch (status) {
+      case 'pending':
+        return visits.filter(v => v.status === 'pending').length;
+      case 'approved':
+        return visits.filter(v => v.status === 'inside' || v.status === 'outside').length;
+      case 'denied':
+        return visits.filter(v => v.status === 'denied').length;
+      default:
+        return visits.length;
+    }
+  };
+
+  const canShowQR = (visit: Visit) => {
+    return visit.status === 'inside' || visit.status === 'outside';
+  };
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <nav className="bg-blue-600 shadow-sm text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -174,13 +174,13 @@ export default function CreateQRPage() {
                 <h1 className="text-xl font-bold">VeriAccessSCAE</h1>
               </div>
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <Link href="/user/dashboard" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <Link href="/user/dashboard" className="border-transparent text-blue-100 hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Dashboard
                 </Link>
-                <Link href="/user/visits" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <Link href="/user/visits" className="border-white text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Mis Visitas
                 </Link>
-                <Link href="/user/create-qr" className="border-white text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <Link href="/user/create-visit" className="border-transparent text-blue-100 hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Registrar Visita
                 </Link>
               </div>
@@ -193,7 +193,7 @@ export default function CreateQRPage() {
                   localStorage.removeItem('user');
                   router.push('/auth/login');
                 }}
-                className="text-white hover:text-gray-200 text-sm font-medium"
+                className="text-blue-100 hover:text-white text-sm font-medium"
               >
                 Cerrar Sesión
               </button>
@@ -204,224 +204,226 @@ export default function CreateQRPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-6">Registrar Visita</h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900">Mis Visitas</h1>
+            <Button
+              onClick={() => router.push('/user/create-visit')}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              ➕ Nueva Visita
+            </Button>
+          </div>
           
           {error && (
-            <Alert variant="error" className="mb-6">
-              <AlertTitle>{error}</AlertTitle>
+            <Alert variant="error" className="mb-6 border-red-500 bg-red-50">
+              <AlertTitle className="text-red-800">Error</AlertTitle>
+              <p className="text-red-700 text-sm mt-1">{error}</p>
             </Alert>
           )}
-          
-          {success && (
-            <Alert variant="success" className="mb-6">
-              <AlertTitle>{success}</AlertTitle>
-            </Alert>
-          )}
-          
-          <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
-            <form onSubmit={handleSubmit} className="px-4 py-5 sm:p-6 space-y-6">
-              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                <div className="sm:col-span-3">
-                  <label htmlFor="visitor_type" className="block text-sm font-medium text-gray-700">
-                    Tipo de Visita
-                  </label>
-                  <div className="mt-1">
-                    <select
-                      name="visitor_type"
-                      id="visitor_type"
-                      value={formData.visitor_type}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    >
-                      <option value="regular">Regular</option>
-                      <option value="business">Empresarial</option>
-                      <option value="temporary">Temporal</option>
-                    </select>
-                  </div>
-                </div>
 
-                <div className="sm:col-span-3">
-                  <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
-                    Propósito de la visita
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="text"
-                      name="purpose"
-                      id="purpose"
-                      required
-                      value={formData.purpose}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label htmlFor="first_name" className="block text-sm font-medium text-gray-700">
-                    Nombre
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="text"
-                      name="first_name"
-                      id="first_name"
-                      required
-                      value={formData.first_name}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label htmlFor="last_name" className="block text-sm font-medium text-gray-700">
-                    Apellido
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="text"
-                      name="last_name"
-                      id="last_name"
-                      required
-                      value={formData.last_name}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label htmlFor="id_number" className="block text-sm font-medium text-gray-700">
-                    Número de Identificación
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="text"
-                      name="id_number"
-                      id="id_number"
-                      required
-                      value={formData.id_number}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                    Teléfono
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="tel"
-                      name="phone"
-                      id="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="email"
-                      name="email"
-                      id="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                {showBusinessFields && (
-                  <div className="sm:col-span-3">
-                    <label htmlFor="company" className="block text-sm font-medium text-gray-700">
-                      Empresa
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        name="company"
-                        id="company"
-                        value={formData.company}
-                        onChange={handleChange}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      />
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-4 mb-8">
+            <Card className="bg-white shadow border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600 text-xl font-bold">{getStatusCount('all')}</span>
                     </div>
                   </div>
-                )}
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Total de Visitas</dt>
+                      <dd className="text-lg font-medium text-gray-900">{getStatusCount('all')}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                {showApartmentField && (
-                  <div className="sm:col-span-3">
-                    <label htmlFor="apartment_number" className="block text-sm font-medium text-gray-700">
-                      Número de Apartamento
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        name="apartment_number"
-                        id="apartment_number"
-                        value={formData.apartment_number}
-                        onChange={handleChange}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      />
+            <Card className="bg-white shadow border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                      <span className="text-yellow-600 text-xl font-bold">{getStatusCount('pending')}</span>
                     </div>
                   </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Pendientes</dt>
+                      <dd className="text-lg font-medium text-gray-900">{getStatusCount('pending')}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-green-600 text-xl font-bold">{getStatusCount('approved')}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Aprobadas</dt>
+                      <dd className="text-lg font-medium text-gray-900">{getStatusCount('approved')}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow border border-gray-200">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-red-600 text-xl font-bold">{getStatusCount('denied')}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-600 truncate">Denegadas</dt>
+                      <dd className="text-lg font-medium text-gray-900">{getStatusCount('denied')}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="bg-white shadow border border-gray-200 rounded-lg mb-6">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                {[
+                  { key: 'all', label: 'Todas', count: getStatusCount('all') },
+                  { key: 'pending', label: 'Pendientes', count: getStatusCount('pending') },
+                  { key: 'approved', label: 'Aprobadas', count: getStatusCount('approved') },
+                  { key: 'denied', label: 'Denegadas', count: getStatusCount('denied') },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setSelectedFilter(tab.key as FilterType)}
+                    className={`${
+                      selectedFilter === tab.key
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm flex items-center space-x-2`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className={`${
+                      selectedFilter === tab.key
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'bg-gray-100 text-gray-900'
+                    } py-0.5 px-2.5 rounded-full text-xs font-medium`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </div>
+
+          {/* Visits List */}
+          <div className="bg-white shadow border border-gray-200 overflow-hidden sm:rounded-lg">
+            {loading ? (
+              <div className="p-8 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+              </div>
+            ) : filteredVisits.length > 0 ? (
+              <ul className="divide-y divide-gray-200">
+                {filteredVisits.map((visit) => (
+                  <li key={visit.id} className="p-6 hover:bg-gray-50 transition-colors duration-150">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-shrink-0 h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-2xl">
+                            {getVisitTypeIcon(visit.visitor_type)}
+                          </span>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900">
+                            {visit.first_name} {visit.last_name}
+                          </h3>
+                          <div className="flex items-center space-x-3 mt-1">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {getVisitTypeName(visit.visitor_type)}
+                            </span>
+                            {getStatusBadge(visit.status)}
+                          </div>
+                          <div className="mt-2 text-sm text-gray-600 space-y-1">
+                            <p>ID: {visit.id_number} | Tel: {visit.phone}</p>
+                            {visit.apartment_number && (
+                              <p>Apartamento: {visit.apartment_number}</p>
+                            )}
+                            {visit.visitor_type === 'temporary' && visit.entry_date && visit.exit_date && (
+                              <p>
+                                Período: {new Date(visit.entry_date).toLocaleDateString()} - {new Date(visit.exit_date).toLocaleDateString()}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500">
+                              Registrada: {new Date(visit.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/user/visits/${visit.id}`)}
+                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        >
+                          👁️ Ver Detalles
+                        </Button>
+                        {canShowQR(visit) && (
+                          <Button
+                            size="sm"
+                            onClick={() => router.push(`/user/visits/${visit.id}/qr`)}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            📱 Ver QR
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="p-8 text-center text-gray-500">
+                <div className="mx-auto h-16 w-16 text-gray-400 mb-4">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  {selectedFilter === 'all' ? 'No tienes visitas registradas' : 
+                   selectedFilter === 'pending' ? 'No tienes visitas pendientes' :
+                   selectedFilter === 'approved' ? 'No tienes visitas aprobadas' :
+                   'No tienes visitas denegadas'}
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  {selectedFilter === 'all' ? 'Comienza registrando tu primera visita.' : 
+                   selectedFilter === 'pending' ? 'Todas tus visitas han sido procesadas.' :
+                   selectedFilter === 'approved' ? 'Aún no tienes visitas aprobadas por el administrador.' :
+                   'Todas tus visitas han sido aprobadas o están pendientes.'}
+                </p>
+                {selectedFilter === 'all' && (
+                  <Button
+                    onClick={() => router.push('/user/create-visit')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Registrar Primera Visita
+                  </Button>
                 )}
-
-                <div className="sm:col-span-3">
-                  <label htmlFor="valid_from" className="block text-sm font-medium text-gray-700">
-                    Válido desde
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="datetime-local"
-                      name="valid_from"
-                      id="valid_from"
-                      required
-                      value={formData.valid_from}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label htmlFor="valid_to" className="block text-sm font-medium text-gray-700">
-                    Válido hasta
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="datetime-local"
-                      name="valid_to"
-                      id="valid_to"
-                      required
-                      value={formData.valid_to}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    />
-                  </div>
-                </div>
               </div>
-
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  isLoading={loading}
-                  disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Registrar Visita
-                </Button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
       </main>

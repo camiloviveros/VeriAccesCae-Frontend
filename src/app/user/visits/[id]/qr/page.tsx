@@ -1,3 +1,4 @@
+// src/app/user/visits/[id]/qr/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -16,6 +17,11 @@ interface Visitor {
   visitor_type?: string;
   id_number?: string;
   phone?: string;
+  apartment_number?: string;
+  company?: string;
+  entry_date?: string;
+  exit_date?: string;
+  created_at?: string;
 }
 
 export default function VisitorQRPage() {
@@ -87,10 +93,15 @@ export default function VisitorQRPage() {
           } catch (accessError) {
             console.log('Access already exists or error creating access:', accessError);
             // If access creation fails, try to get QR directly
-            const qrResponse = await accessService.getQRCode(foundVisitor.id);
-            setQrImage(qrResponse.qr_code_image);
-            setSuccess('Código QR disponible para la visita aprobada');
-            return;
+            try {
+              const qrResponse = await accessService.getQRCode(foundVisitor.id);
+              setQrImage(qrResponse.qr_code_image);
+              setSuccess('Código QR disponible para la visita aprobada');
+              return;
+            } catch (qrError) {
+              console.error('Error getting QR directly:', qrError);
+              throw qrError;
+            }
           }
           
           if (accessResponse && accessResponse.id) {
@@ -101,7 +112,7 @@ export default function VisitorQRPage() {
           }
         } catch (err) {
           console.error('Error fetching QR:', err);
-          setError('Error al generar el código QR. Contacte al administrador.');
+          setError('Error al generar el código QR. La visita ha sido aprobada pero aún no está disponible el QR. Intente más tarde o contacte al administrador.');
         }
       } else {
         setError('La visita aún no ha sido aprobada por administración. El código QR estará disponible una vez aprobada.');
@@ -117,13 +128,13 @@ export default function VisitorQRPage() {
   const getStatusBadge = (status?: string) => {
     switch(status) {
       case 'inside':
-        return <Badge variant="success" className="bg-green-500 text-white">Aprobado - Puede Ingresar</Badge>;
+        return <Badge className="bg-green-500 text-white text-sm px-3 py-1">✅ Aprobado - Puede Ingresar</Badge>;
       case 'outside':
-        return <Badge variant="secondary" className="bg-gray-500 text-white">Aprobado - Fuera</Badge>;
+        return <Badge className="bg-green-600 text-white text-sm px-3 py-1">✅ Aprobado - Fuera</Badge>;
       case 'denied':
-        return <Badge variant="destructive" className="bg-red-500 text-white">Denegado</Badge>;
+        return <Badge className="bg-red-500 text-white text-sm px-3 py-1">❌ Denegado</Badge>;
       default:
-        return <Badge variant="info" className="bg-yellow-500 text-white">Pendiente de Aprobación</Badge>;
+        return <Badge className="bg-yellow-500 text-white text-sm px-3 py-1">⏳ Pendiente de Aprobación</Badge>;
     }
   };
 
@@ -140,8 +151,19 @@ export default function VisitorQRPage() {
     }
   };
 
+  const getVisitTypeIcon = (type?: string) => {
+    switch(type) {
+      case 'temporary':
+        return '⏰';
+      case 'business':
+        return '🏢';
+      default:
+        return '🏠';
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <nav className="bg-blue-600 shadow-sm text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -151,13 +173,13 @@ export default function VisitorQRPage() {
                 <h1 className="text-xl font-bold">VeriAccessSCAE</h1>
               </div>
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <Link href="/user/dashboard" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <Link href="/user/dashboard" className="border-transparent text-blue-100 hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Dashboard
                 </Link>
                 <Link href="/user/visits" className="border-white text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Mis Visitas
                 </Link>
-                <Link href="/user/create-visit" className="border-transparent text-white hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <Link href="/user/create-visit" className="border-transparent text-blue-100 hover:border-white hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                   Registrar Visita
                 </Link>
               </div>
@@ -170,7 +192,7 @@ export default function VisitorQRPage() {
                   localStorage.removeItem('user');
                   router.push('/auth/login');
                 }}
-                className="text-white hover:text-gray-200 text-sm font-medium"
+                className="text-blue-100 hover:text-white text-sm font-medium"
               >
                 Cerrar Sesión
               </button>
@@ -184,9 +206,12 @@ export default function VisitorQRPage() {
           <div className="flex items-center mb-6">
             <button
               onClick={() => router.push('/user/visits')}
-              className="mr-4 text-blue-600 hover:text-blue-800 font-medium"
+              className="mr-4 text-blue-600 hover:text-blue-800 font-medium flex items-center"
             >
-              ← Volver a Mis Visitas
+              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Volver a Mis Visitas
             </button>
             <h1 className="text-2xl font-semibold text-gray-900">
               Código QR de Acceso
@@ -195,45 +220,60 @@ export default function VisitorQRPage() {
           
           {error && (
             <Alert variant="error" className="mb-6 border-red-500 bg-red-50">
-              <AlertTitle className="text-red-800">Error</AlertTitle>
+              <AlertTitle className="text-red-800">⚠️ Estado de la Visita</AlertTitle>
               <p className="text-red-700 text-sm mt-1">{error}</p>
             </Alert>
           )}
           
           {success && (
             <Alert variant="success" className="mb-6 border-green-500 bg-green-50">
-              <AlertTitle className="text-green-800">Éxito</AlertTitle>
+              <AlertTitle className="text-green-800">✅ ¡QR Listo!</AlertTitle>
               <p className="text-green-700 text-sm mt-1">{success}</p>
             </Alert>
           )}
           
           {loading ? (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+                <p className="text-gray-600 mt-4">Verificando estado de la visita...</p>
+              </div>
             </div>
           ) : visitor ? (
             <div className="bg-white shadow-lg overflow-hidden sm:rounded-lg border border-gray-200">
               {/* Visitor info header */}
               <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center">
+                  <div className="flex items-center space-x-4">
                     <div className="flex-shrink-0 h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 text-xl font-medium">
-                        {visitor.first_name.charAt(0)}{visitor.last_name.charAt(0)}
+                      <span className="text-blue-600 text-2xl">
+                        {getVisitTypeIcon(visitor.visitor_type)}
                       </span>
                     </div>
-                    <div className="ml-4">
+                    <div>
                       <h2 className="text-xl font-medium text-gray-900">
                         {visitor.first_name} {visitor.last_name}
                       </h2>
-                      <p className="text-sm text-gray-600">
-                        {visitor.id_number && `ID: ${visitor.id_number}`}
-                        {visitor.phone && ` • Tel: ${visitor.phone}`}
-                      </p>
-                      <div className="mt-2">
+                      <div className="flex items-center space-x-3 mt-1">
+                        <p className="text-sm text-gray-600">
+                          {visitor.id_number && `ID: ${visitor.id_number}`}
+                          {visitor.phone && ` • Tel: ${visitor.phone}`}
+                        </p>
+                      </div>
+                      <div className="mt-2 flex items-center space-x-2">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           {getVisitTypeName(visitor.visitor_type)}
                         </span>
+                        {visitor.apartment_number && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Apt. {visitor.apartment_number}
+                          </span>
+                        )}
+                        {visitor.company && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {visitor.company}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -245,25 +285,27 @@ export default function VisitorQRPage() {
 
               {qrImage ? (
                 // Show QR Code
-                <div className="px-4 py-8 sm:p-8 flex flex-col items-center">
+                <div className="px-4 py-8 sm:p-8">
                   <div className="text-center mb-6">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                      🎫 Código QR de Acceso
+                    <h3 className="text-3xl font-bold text-gray-900 mb-2">
+                      🎫 Su Código QR de Acceso
                     </h3>
-                    <p className="text-gray-600">
+                    <p className="text-lg text-gray-600">
                       Muestre este código QR al personal de seguridad para obtener acceso
                     </p>
                   </div>
                   
-                  <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-200">
-                    <img 
-                      src={qrImage} 
-                      alt="Código QR de acceso" 
-                      className="w-64 h-64 mx-auto"
-                    />
+                  <div className="flex justify-center mb-8">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl border-4 border-blue-100">
+                      <img 
+                        src={qrImage} 
+                        alt="Código QR de acceso" 
+                        className="w-72 h-72 mx-auto"
+                      />
+                    </div>
                   </div>
                   
-                  <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                  <div className="flex justify-center space-x-4 mb-8">
                     <Button 
                       onClick={() => {
                         const link = document.createElement('a');
@@ -273,22 +315,28 @@ export default function VisitorQRPage() {
                         link.click();
                         document.body.removeChild(link);
                       }}
-                      className="bg-green-600 hover:bg-green-700 text-white flex items-center"
+                      className="bg-green-600 hover:bg-green-700 text-white flex items-center px-6 py-3"
                     >
-                      📥 Descargar QR
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Descargar QR
                     </Button>
                     
                     <Button 
                       variant="outline"
                       onClick={() => router.push(`/user/visits/${visitor.id}`)}
-                      className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                      className="border-blue-300 text-blue-600 hover:bg-blue-50 flex items-center px-6 py-3"
                     >
-                      👁️ Ver Detalles de la Visita
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Ver Detalles de la Visita
                     </Button>
                   </div>
                   
                   {/* Instructions */}
-                  <div className="mt-8 bg-blue-50 p-6 rounded-lg border border-blue-200 max-w-2xl">
+                  <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 max-w-2xl mx-auto mb-6">
                     <h4 className="text-lg font-medium text-blue-900 mb-3">
                       📋 Instrucciones de Uso
                     </h4>
@@ -311,58 +359,129 @@ export default function VisitorQRPage() {
                           Recuerde que esta es una visita temporal con fecha de expiración
                         </li>
                       )}
+                      <li className="flex items-start">
+                        <span className="font-medium mr-2">{visitor.visitor_type === 'temporary' ? '5.' : '4.'}</span>
+                        Conserve este código hasta completar su visita
+                      </li>
                     </ul>
+                  </div>
+                  
+                  {/* Visit Summary */}
+                  <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 max-w-2xl mx-auto">
+                    <h4 className="text-lg font-medium text-gray-900 mb-3">
+                      📄 Resumen de la Visita
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">Visitante:</span>
+                        <p className="text-gray-900">{visitor.first_name} {visitor.last_name}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Documento:</span>
+                        <p className="text-gray-900">{visitor.id_number || 'No proporcionado'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Tipo de Visita:</span>
+                        <p className="text-gray-900">{getVisitTypeName(visitor.visitor_type)}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Estado:</span>
+                        <p className="text-green-600 font-medium">✅ Aprobado</p>
+                      </div>
+                      {visitor.apartment_number && (
+                        <>
+                          <div>
+                            <span className="font-medium text-gray-700">Apartamento:</span>
+                            <p className="text-gray-900">{visitor.apartment_number}</p>
+                          </div>
+                        </>
+                      )}
+                      {visitor.company && (
+                        <>
+                          <div>
+                            <span className="font-medium text-gray-700">Empresa:</span>
+                            <p className="text-gray-900">{visitor.company}</p>
+                          </div>
+                        </>
+                      )}
+                      {visitor.visitor_type === 'temporary' && visitor.entry_date && visitor.exit_date && (
+                        <>
+                          <div>
+                            <span className="font-medium text-gray-700">Válido desde:</span>
+                            <p className="text-gray-900">{new Date(visitor.entry_date).toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Válido hasta:</span>
+                            <p className="text-gray-900">{new Date(visitor.exit_date).toLocaleString()}</p>
+                          </div>
+                        </>
+                      )}
+                      {visitor.created_at && (
+                        <div className="sm:col-span-2">
+                          <span className="font-medium text-gray-700">Fecha de solicitud:</span>
+                          <p className="text-gray-900">{new Date(visitor.created_at).toLocaleString()}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
                 // Show waiting message
-                <div className="px-4 py-8 sm:p-8 flex flex-col items-center">
-                  <div className="rounded-full bg-yellow-100 p-6 mb-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  
-                  <h3 className="text-xl font-medium text-gray-900 mb-4">
-                    ⏳ Esperando Aprobación
-                  </h3>
-                  
-                  <p className="text-center text-gray-600 mb-6 max-w-md">
-                    Su solicitud de visita está siendo revisada por el administrador. 
-                    El código QR estará disponible una vez que la visita sea aprobada.
-                  </p>
-                  
-                  <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200 mb-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-yellow-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="text-sm font-medium text-yellow-800">Estado Actual</h4>
-                        <p className="text-sm text-yellow-700 mt-1">
-                          Visita pendiente de aprobación por parte del administrador del edificio.
-                        </p>
+                <div className="px-4 py-8 sm:p-8">
+                  <div className="text-center">
+                    <div className="mx-auto w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mb-6">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    
+                    <h3 className="text-2xl font-medium text-gray-900 mb-4">
+                      ⏳ Esperando Aprobación
+                    </h3>
+                    
+                    <p className="text-center text-gray-600 mb-6 max-w-md mx-auto">
+                      Su solicitud de visita está siendo revisada por el administrador. 
+                      El código QR estará disponible una vez que la visita sea aprobada.
+                    </p>
+                    
+                    <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200 mb-6 max-w-lg mx-auto">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <svg className="h-6 w-6 text-yellow-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h4 className="text-sm font-medium text-yellow-800">Estado Actual</h4>
+                          <p className="text-sm text-yellow-700 mt-1">
+                            Visita <strong>pendiente de aprobación</strong> por parte del administrador del edificio.
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button
-                      onClick={() => router.push('/user/visits')}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      ← Volver a Mis Visitas
-                    </Button>
                     
-                    <Button
-                      variant="outline"
-                      onClick={() => window.location.reload()}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-50"
-                    >
-                      🔄 Verificar Estado
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                      <Button
+                        onClick={() => router.push('/user/visits')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Volver a Mis Visitas
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => window.location.reload()}
+                        className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Verificar Estado
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
