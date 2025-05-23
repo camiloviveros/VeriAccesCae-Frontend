@@ -1,8 +1,7 @@
+
 import apiClient from './config';
 import { PaginatedResponse } from './types';
 
-export * from './types';
-export { default as apiClient } from './config';
 export interface ParkingAreaResponse {
   id: number;
   name: string;
@@ -21,7 +20,16 @@ export interface VehicleResponse {
   model: string;
   color: string;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
   [key: string]: any;
+}
+
+export interface VehicleCreateData {
+  license_plate: string;
+  brand: string;
+  model: string;
+  color: string;
 }
 
 export interface ParkingAccessResponse {
@@ -44,6 +52,7 @@ export interface ParkingLogResponse {
   [key: string]: any;
 }
 
+// Funciones del servicio
 export const getVehicles = async (): Promise<VehicleResponse[] | PaginatedResponse<VehicleResponse>> => {
   try {
     const response = await apiClient.get<VehicleResponse[] | PaginatedResponse<VehicleResponse>>('/parking/vehicles/');
@@ -54,12 +63,32 @@ export const getVehicles = async (): Promise<VehicleResponse[] | PaginatedRespon
   }
 };
 
-export const createVehicle = async (data: Partial<VehicleResponse>): Promise<VehicleResponse> => {
+export const createVehicle = async (data: VehicleCreateData): Promise<VehicleResponse> => {
   try {
+    console.log("Enviando datos del vehículo:", data);
     const response = await apiClient.post<VehicleResponse>('/parking/vehicles/', data);
+    console.log("Respuesta del servidor:", response.data);
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error creating vehicle:", error);
+    
+    // Mejorar el manejo de errores
+    const err = error as any;
+    if (err.response?.data) {
+      console.error("Error del servidor:", err.response.data);
+      if (typeof err.response.data === 'object') {
+        // Formatear errores de validación del backend
+        const errorMessages = Object.entries(err.response.data)
+          .map(([field, messages]) => {
+            if (Array.isArray(messages)) {
+              return `${field}: ${messages.join(', ')}`;
+            }
+            return `${field}: ${messages}`;
+          })
+          .join('; ');
+        throw new Error(errorMessages);
+      }
+    }
     throw error;
   }
 };
