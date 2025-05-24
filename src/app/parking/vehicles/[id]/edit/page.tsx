@@ -1,18 +1,20 @@
-
+// src/app/parking/vehicles/[id]/edit/page.tsx
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../../components/layout/DashboardLayout';
-import { parkingService } from '../../../../../lib/api';
-import { Button } from '../../../../../components/ui/Button';
-import { Alert, AlertTitle, AlertDescription } from '../../../../../components/ui/Alert';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import DashboardLayout from '../../../../../../components/layout/DashboardLayout';
+import { parkingService } from '../../../../../../lib/api';
+import { Button } from '../../../../../../components/ui/Button';
+import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
+import { Loading } from '../../../../../../components/ui/Loading';
 
 interface VehicleFormData {
   license_plate: string;
   brand: string;
   model: string;
   color: string;
+  is_active: boolean;
 }
 
 interface FormErrors {
@@ -33,18 +35,51 @@ const COMMON_COLORS = [
   'Verde', 'Amarillo', 'Naranja', 'Café', 'Beige', 'Dorado'
 ];
 
-export default function NewVehiclePage() {
+export default function EditVehiclePage() {
   const [formData, setFormData] = useState<VehicleFormData>({
     license_plate: '',
     brand: '',
     model: '',
-    color: ''
+    color: '',
+    is_active: true
   });
+  const [originalData, setOriginalData] = useState<VehicleFormData | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
   const router = useRouter();
+  const params = useParams();
+  const vehicleId = params.id as string;
+
+  useEffect(() => {
+    fetchVehicle();
+  }, [vehicleId]);
+
+  const fetchVehicle = async () => {
+    try {
+      setLoading(true);
+      const vehicle = await parkingService.getVehicle(vehicleId);
+      
+      const vehicleData: VehicleFormData = {
+        license_plate: vehicle.license_plate,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        color: vehicle.color,
+        is_active: vehicle.is_active
+      };
+      
+      setFormData(vehicleData);
+      setOriginalData(vehicleData);
+    } catch (err) {
+      console.error('Error fetching vehicle:', err);
+      setError('No se pudo cargar la información del vehículo');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -84,14 +119,18 @@ export default function NewVehiclePage() {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
     
-    // Formatear placa a mayúsculas
-    const formattedValue = name === 'license_plate' ? value.toUpperCase() : value;
+    // Manejar checkbox para is_active
+    const finalValue = type === 'checkbox' 
+      ? (e.target as HTMLInputElement).checked 
+      : name === 'license_plate' 
+        ? value.toUpperCase() 
+        : value;
     
     setFormData(prev => ({
       ...prev,
-      [name]: formattedValue
+      [name]: finalValue
     }));
     
     // Limpiar error del campo cuando el usuario empieza a escribir
@@ -110,57 +149,64 @@ export default function NewVehiclePage() {
       return;
     }
     
-    setLoading(true);
+    setSaving(true);
     setError('');
     setSuccess('');
     
     try {
-      await parkingService.createVehicle(formData);
-      setSuccess('Vehículo registrado correctamente');
+      await parkingService.updateVehicle(vehicleId, formData);
+      setSuccess('Vehículo actualizado correctamente');
       
-      // Redireccionar después de un breve retraso para mostrar el mensaje de éxito
+      // Actualizar datos originales
+      setOriginalData(formData);
+      
+      // Redireccionar después de un breve retraso
       setTimeout(() => {
         router.push('/parking/vehicles');
       }, 1500);
     } catch (err: any) {
-      console.error('Error creating vehicle:', err);
+      console.error('Error updating vehicle:', err);
       
-      // Manejar diferentes tipos de errores
       if (err.message) {
         setError(err.message);
-      } else if (err.response?.data) {
-        if (typeof err.response.data === 'string') {
-          setError(err.response.data);
-        } else if (typeof err.response.data === 'object') {
-          // Formatear errores de validación
-          const errorMessages = Object.entries(err.response.data)
-            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
-            .join('; ');
-          setError(errorMessages || 'Error al registrar el vehículo');
-        }
       } else {
-        setError('Error al registrar el vehículo. Por favor, intente nuevamente.');
+        setError('Error al actualizar el vehículo. Por favor, intente nuevamente.');
       }
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const isFormValid = () => {
-    return formData.license_plate.trim() && 
-           formData.brand.trim() && 
-           formData.model.trim() && 
-           formData.color.trim();
+  const hasChanges = () => {
+    if (!originalData) return false;
+    return JSON.stringify(formData) !== JSON.stringify(originalData);
   };
+
+  const handleReset = () => {
+    if (originalData) {
+      setFormData(originalData);
+      setErrors({});
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center h-64">
+          <Loading size="lg" message="Cargando información del vehículo..." />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Registrar Nuevo Vehículo</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Editar Vehículo</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Complete la información de su vehículo para registrarlo en el sistema
+              Actualice la información de su vehículo
             </p>
           </div>
         </div>
@@ -201,15 +247,11 @@ export default function NewVehiclePage() {
                       }`}
                       placeholder="ABC-123"
                       maxLength={20}
-                      autoFocus
                     />
                     {errors.license_plate && (
                       <p className="mt-1 text-sm text-red-600">{errors.license_plate}</p>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Ingrese la placa sin espacios (ej: ABC-123 o ABC123)
-                  </p>
                 </div>
 
                 {/* Marca */}
@@ -298,15 +340,46 @@ export default function NewVehiclePage() {
                     )}
                   </div>
                 </div>
+
+                {/* Estado */}
+                <div className="sm:col-span-6">
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="is_active"
+                        name="is_active"
+                        type="checkbox"
+                        checked={formData.is_active}
+                        onChange={handleChange}
+                        className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="is_active" className="font-medium text-gray-700">
+                        Vehículo activo
+                      </label>
+                      <p className="text-gray-500">
+                        Desmarque esta opción si el vehículo ya no está en uso
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Resumen del vehículo */}
-              {isFormValid() && (
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                  <h4 className="text-sm font-medium text-blue-900 mb-2">Vista previa del vehículo:</h4>
-                  <p className="text-sm text-blue-700">
-                    <span className="font-semibold">Placa:</span> {formData.license_plate} | 
-                    <span className="font-semibold ml-2">Vehículo:</span> {formData.brand} {formData.model} {formData.color}
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                <h4 className="text-sm font-medium text-blue-900 mb-2">Vista previa:</h4>
+                <p className="text-sm text-blue-700">
+                  <span className="font-semibold">Placa:</span> {formData.license_plate} | 
+                  <span className="font-semibold ml-2">Vehículo:</span> {formData.brand} {formData.model} {formData.color} |
+                  <span className="font-semibold ml-2">Estado:</span> {formData.is_active ? 'Activo' : 'Inactivo'}
+                </p>
+              </div>
+
+              {hasChanges() && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <p className="text-sm text-yellow-800">
+                    Tienes cambios sin guardar
                   </p>
                 </div>
               )}
@@ -316,33 +389,30 @@ export default function NewVehiclePage() {
                   type="button"
                   variant="secondary"
                   onClick={() => router.push('/parking/vehicles')}
-                  disabled={loading}
+                  disabled={saving}
                 >
                   Cancelar
                 </Button>
+                {hasChanges() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleReset}
+                    disabled={saving}
+                  >
+                    Deshacer cambios
+                  </Button>
+                )}
                 <Button
                   type="submit"
-                  isLoading={loading}
-                  disabled={loading || !isFormValid()}
+                  isLoading={saving}
+                  disabled={saving || !hasChanges()}
                   className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Registrar Vehículo
+                  Guardar cambios
                 </Button>
               </div>
             </form>
-          </div>
-
-          {/* Información adicional */}
-          <div className="bg-gray-50 px-4 py-4 sm:px-6 border-t border-gray-200">
-            <div className="text-sm text-gray-600">
-              <p className="font-medium mb-2">Información importante:</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Los campos marcados con <span className="text-red-500">*</span> son obligatorios</li>
-                <li>La placa debe coincidir exactamente con la de su vehículo</li>
-                <li>Una vez registrado, podrá solicitar acceso a las áreas de estacionamiento</li>
-                <li>Puede registrar múltiples vehículos en su cuenta</li>
-              </ul>
-            </div>
           </div>
         </div>
       </div>
