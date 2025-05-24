@@ -1,18 +1,20 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../../components/layout/DashboardLayout';
 import { parkingService } from '../../../../../lib/api';
 import { Button } from '../../../../../components/ui/Button';
 import { Alert, AlertTitle, AlertDescription } from '../../../../../components/ui/Alert';
+import { Loading } from '../../../../../components/ui/Loading';
+import Link from 'next/link';
 
 interface VehicleFormData {
   license_plate: string;
   brand: string;
   model: string;
   color: string;
+  parking_area: string;
 }
 
 interface FormErrors {
@@ -20,6 +22,17 @@ interface FormErrors {
   brand?: string;
   model?: string;
   color?: string;
+  parking_area?: string;
+}
+
+interface ParkingArea {
+  id: number;
+  name: string;
+  description?: string;
+  max_capacity: number;
+  current_count: number;
+  available_spots: number;
+  is_active: boolean;
 }
 
 const COMMON_BRANDS = [
@@ -38,13 +51,33 @@ export default function NewVehiclePage() {
     license_plate: '',
     brand: '',
     model: '',
-    color: ''
+    color: '',
+    parking_area: ''
   });
+  const [areas, setAreas] = useState<ParkingArea[]>([]);
+  const [loadingAreas, setLoadingAreas] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+    fetchParkingAreas();
+  }, []);
+
+  const fetchParkingAreas = async () => {
+    try {
+      setLoadingAreas(true);
+      const response = await parkingService.getAvailableParkingAreas();
+      setAreas(response);
+    } catch (err) {
+      console.error('Error fetching parking areas:', err);
+      setError('No se pudieron cargar las áreas de estacionamiento');
+    } finally {
+      setLoadingAreas(false);
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -77,6 +110,16 @@ export default function NewVehiclePage() {
       newErrors.color = 'El color es requerido';
     } else if (formData.color.length < 3) {
       newErrors.color = 'El color debe tener al menos 3 caracteres';
+    }
+    
+    // Validar área de estacionamiento
+    if (!formData.parking_area) {
+      newErrors.parking_area = 'Debe seleccionar un área de estacionamiento';
+    } else {
+      const selectedArea = areas.find(area => area.id === parseInt(formData.parking_area));
+      if (selectedArea && selectedArea.available_spots <= 0) {
+        newErrors.parking_area = 'El área seleccionada no tiene espacios disponibles';
+      }
     }
     
     setErrors(newErrors);
@@ -115,7 +158,12 @@ export default function NewVehiclePage() {
     setSuccess('');
     
     try {
-      await parkingService.createVehicle(formData);
+      const vehicleData = {
+        ...formData,
+        parking_area: parseInt(formData.parking_area)
+      };
+      
+      await parkingService.createVehicle(vehicleData);
       setSuccess('Vehículo registrado correctamente');
       
       // Redireccionar después de un breve retraso para mostrar el mensaje de éxito
@@ -150,20 +198,55 @@ export default function NewVehiclePage() {
     return formData.license_plate.trim() && 
            formData.brand.trim() && 
            formData.model.trim() && 
-           formData.color.trim();
+           formData.color.trim() &&
+           formData.parking_area;
   };
+
+  const getSelectedArea = () => {
+    return areas.find(area => area.id === parseInt(formData.parking_area));
+  };
+
+  if (loadingAreas) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center h-64">
+          <Loading size="lg" message="Cargando áreas de estacionamiento..." />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Registrar Nuevo Vehículo</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Complete la información de su vehículo para registrarlo en el sistema
-            </p>
+          <div className="flex items-center space-x-4">
+            <Link 
+              href="/parking/vehicles"
+              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Volver
+            </Link>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">Registrar Nuevo Vehículo</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Complete la información de su vehículo para registrarlo en el sistema
+              </p>
+            </div>
           </div>
         </div>
+
+        {areas.length === 0 && (
+          <Alert variant="error">
+            <AlertTitle>Sin áreas disponibles</AlertTitle>
+            <AlertDescription>
+              No hay áreas de estacionamiento disponibles. Contacte al administrador para crear áreas.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {error && (
           <Alert variant="error">
@@ -210,6 +293,47 @@ export default function NewVehiclePage() {
                   <p className="mt-1 text-xs text-gray-500">
                     Ingrese la placa sin espacios (ej: ABC-123 o ABC123)
                   </p>
+                </div>
+
+                {/* Área de Estacionamiento */}
+                <div className="sm:col-span-3">
+                  <label htmlFor="parking_area" className="block text-sm font-medium text-gray-700">
+                    Área de Estacionamiento <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1">
+                    <select
+                      name="parking_area"
+                      id="parking_area"
+                      required
+                      value={formData.parking_area}
+                      onChange={handleChange}
+                      className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                        errors.parking_area ? 'border-red-300' : ''
+                      }`}
+                      disabled={areas.length === 0}
+                    >
+                      <option value="">Seleccione un área</option>
+                      {areas.map(area => (
+                        <option 
+                          key={area.id} 
+                          value={area.id}
+                          disabled={area.available_spots <= 0}
+                        >
+                          {area.name} ({area.available_spots}/{area.max_capacity} disponibles)
+                          {area.available_spots <= 0 && ' - LLENO'}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.parking_area && (
+                      <p className="mt-1 text-sm text-red-600">{errors.parking_area}</p>
+                    )}
+                  </div>
+                  {formData.parking_area && getSelectedArea() && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Área seleccionada: {getSelectedArea()?.name} - 
+                      {getSelectedArea()?.available_spots} espacios disponibles
+                    </p>
+                  )}
                 </div>
 
                 {/* Marca */}
@@ -269,7 +393,7 @@ export default function NewVehiclePage() {
                 </div>
 
                 {/* Color */}
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-6">
                   <label htmlFor="color" className="block text-sm font-medium text-gray-700">
                     Color <span className="text-red-500">*</span>
                   </label>
@@ -301,32 +425,31 @@ export default function NewVehiclePage() {
               </div>
 
               {/* Resumen del vehículo */}
-              {isFormValid() && (
+              {isFormValid() && getSelectedArea() && (
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                   <h4 className="text-sm font-medium text-blue-900 mb-2">Vista previa del vehículo:</h4>
                   <p className="text-sm text-blue-700">
                     <span className="font-semibold">Placa:</span> {formData.license_plate} | 
-                    <span className="font-semibold ml-2">Vehículo:</span> {formData.brand} {formData.model} {formData.color}
+                    <span className="font-semibold ml-2">Vehículo:</span> {formData.brand} {formData.model} {formData.color} |
+                    <span className="font-semibold ml-2">Área:</span> {getSelectedArea()?.name}
                   </p>
                 </div>
               )}
 
               <div className="flex justify-end space-x-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => router.push('/parking/vehicles')}
-                  disabled={loading}
+                <Link
+                  href="/parking/vehicles"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Cancelar
-                </Button>
+                </Link>
                 <Button
                   type="submit"
                   isLoading={loading}
-                  disabled={loading || !isFormValid()}
+                  disabled={loading || !isFormValid() || areas.length === 0}
                   className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Registrar Vehículo
+                  {loading ? 'Registrando...' : 'Registrar Vehículo'}
                 </Button>
               </div>
             </form>
@@ -339,12 +462,51 @@ export default function NewVehiclePage() {
               <ul className="list-disc list-inside space-y-1">
                 <li>Los campos marcados con <span className="text-red-500">*</span> son obligatorios</li>
                 <li>La placa debe coincidir exactamente con la de su vehículo</li>
-                <li>Una vez registrado, podrá solicitar acceso a las áreas de estacionamiento</li>
-                <li>Puede registrar múltiples vehículos en su cuenta</li>
+                <li>Debe seleccionar un área de estacionamiento con espacios disponibles</li>
+                <li>Una vez registrado, tendrá acceso automático al área seleccionada</li>
+                <li>Puede registrar múltiples vehículos en diferentes áreas</li>
               </ul>
             </div>
           </div>
         </div>
+
+        {/* Información de áreas disponibles */}
+        {areas.length > 0 && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Áreas de Estacionamiento Disponibles
+              </h3>
+              <p className="mt-1 text-sm text-gray-600">
+                Espacios disponibles en cada área
+              </p>
+            </div>
+            <div className="border-t border-gray-200">
+              <dl>
+                {areas.map((area, index) => (
+                  <div key={area.id} className={`${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6`}>
+                    <dt className="text-sm font-medium text-gray-500">{area.name}</dt>
+                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <span>
+                          {area.available_spots}/{area.max_capacity} espacios disponibles
+                        </span>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          area.available_spots > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {area.available_spots > 0 ? 'Disponible' : 'Lleno'}
+                        </span>
+                      </div>
+                      {area.description && (
+                        <p className="mt-1 text-xs text-gray-500">{area.description}</p>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

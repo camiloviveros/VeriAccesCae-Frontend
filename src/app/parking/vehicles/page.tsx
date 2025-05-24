@@ -17,6 +17,15 @@ interface Vehicle {
   brand: string;
   model: string;
   color: string;
+  parking_area: number;
+  parking_area_detail?: {
+    id: number;
+    name: string;
+    description?: string;
+    max_capacity: number;
+    current_count: number;
+    available_spots: number;
+  };
   is_active: boolean;
   user: number;
   created_at?: string;
@@ -76,6 +85,12 @@ export default function VehiclesPage() {
   };
 
   const handleDelete = async (vehicle: Vehicle) => {
+    const confirmMessage = `¿Está seguro de eliminar el vehículo ${vehicle.license_plate}?\n\nEsto liberará un espacio en el área "${vehicle.parking_area_detail?.name || 'N/A'}".`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
     try {
       setDeleting(vehicle.id);
       setError('');
@@ -126,7 +141,8 @@ export default function VehiclesPage() {
     const matchesSearch = searchTerm === '' || 
       vehicle.license_plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vehicle.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.model.toLowerCase().includes(searchTerm.toLowerCase());
+      vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vehicle.parking_area_detail?.name.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesFilter = filterActive === 'all' ||
       (filterActive === 'active' && vehicle.is_active) ||
@@ -192,7 +208,7 @@ export default function VehiclesPage() {
                 <div className="flex-1">
                   <input
                     type="text"
-                    placeholder="Buscar por placa, marca o modelo..."
+                    placeholder="Buscar por placa, marca, modelo o área..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
@@ -256,6 +272,17 @@ export default function VehiclesPage() {
                         <p className="mt-1 text-sm text-gray-600">
                           {vehicle.brand} {vehicle.model} - {vehicle.color}
                         </p>
+                        <div className="mt-1 flex items-center text-sm text-gray-500">
+                          <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          <span className="font-medium">Área:</span> {vehicle.parking_area_detail?.name || 'N/A'}
+                          {vehicle.parking_area_detail && (
+                            <span className="ml-2 text-xs">
+                              ({vehicle.parking_area_detail.available_spots}/{vehicle.parking_area_detail.max_capacity} disponibles)
+                            </span>
+                          )}
+                        </div>
                         {vehicle.created_at && (
                           <p className="mt-1 text-xs text-gray-500">
                             Registrado el {formatDate(vehicle.created_at)}

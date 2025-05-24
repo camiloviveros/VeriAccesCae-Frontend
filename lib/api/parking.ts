@@ -8,7 +8,8 @@ export interface ParkingAreaResponse {
   max_capacity: number;
   current_count: number;
   is_active: boolean;
-  available_spots?: number;
+  available_spots: number;  // ACTUALIZADO: Ya no opcional
+  vehicles_count?: number;
   [key: string]: any;
 }
 
@@ -26,6 +27,15 @@ export interface VehicleResponse {
   brand: string;
   model: string;
   color: string;
+  parking_area: number;  // NUEVO CAMPO OBLIGATORIO
+  parking_area_detail?: {  // NUEVO CAMPO
+    id: number;
+    name: string;
+    description?: string;
+    max_capacity: number;
+    current_count: number;
+    available_spots: number;
+  };
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -37,6 +47,7 @@ export interface VehicleCreateData {
   brand: string;
   model: string;
   color: string;
+  parking_area: number;  // NUEVO CAMPO OBLIGATORIO
   user?: number; // Campo opcional, se agregará automáticamente si no se proporciona
 }
 
@@ -45,6 +56,7 @@ export interface VehicleUpdateData {
   brand?: string;
   model?: string;
   color?: string;
+  parking_area?: number;  // NUEVO CAMPO
   is_active?: boolean;
 }
 
@@ -152,6 +164,7 @@ export const createVehicle = async (data: VehicleCreateData): Promise<VehicleRes
               brand: 'Marca',
               model: 'Modelo',
               color: 'Color',
+              parking_area: 'Área de Estacionamiento',  // NUEVO
               user: 'Usuario'
             };
             const fieldName = fieldNames[field] || field;
@@ -225,6 +238,26 @@ export const getParkingAreas = async (params?: Record<string, any>): Promise<Par
     return response.data;
   } catch (error) {
     console.error("Error getting parking areas:", error);
+    throw error;
+  }
+};
+
+// NUEVA FUNCIÓN - Esta es la que faltaba
+export const getAvailableParkingAreas = async (): Promise<ParkingAreaResponse[]> => {
+  try {
+    const response = await apiClient.get<ParkingAreaResponse[] | PaginatedResponse<ParkingAreaResponse>>('/parking/areas/', { 
+      params: { active_only: 'true' } 
+    });
+    
+    if (Array.isArray(response.data)) {
+      return response.data;
+    } else if (response.data && 'results' in response.data) {
+      return response.data.results;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error("Error getting available parking areas:", error);
     throw error;
   }
 };

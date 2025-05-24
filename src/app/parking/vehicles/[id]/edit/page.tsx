@@ -7,12 +7,14 @@ import { parkingService } from '../../../../../../lib/api';
 import { Button } from '../../../../../../components/ui/Button';
 import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
 import { Loading } from '../../../../../../components/ui/Loading';
+import Link from 'next/link';
 
 interface VehicleFormData {
   license_plate: string;
   brand: string;
   model: string;
   color: string;
+  parking_area: string;
   is_active: boolean;
 }
 
@@ -21,6 +23,17 @@ interface FormErrors {
   brand?: string;
   model?: string;
   color?: string;
+  parking_area?: string;
+}
+
+interface ParkingArea {
+  id: number;
+  name: string;
+  description?: string;
+  max_capacity: number;
+  current_count: number;
+  available_spots: number;
+  is_active: boolean;
 }
 
 const COMMON_BRANDS = [
@@ -40,9 +53,12 @@ export default function EditVehiclePage() {
     brand: '',
     model: '',
     color: '',
+    parking_area: '',
     is_active: true
   });
   const [originalData, setOriginalData] = useState<VehicleFormData | null>(null);
+  const [areas, setAreas] = useState<ParkingArea[]>([]);
+  const [loadingAreas, setLoadingAreas] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,7 +70,10 @@ export default function EditVehiclePage() {
   const vehicleId = params.id as string;
 
   useEffect(() => {
-    fetchVehicle();
+    Promise.all([
+      fetchVehicle(),
+      fetchParkingAreas()
+    ]);
   }, [vehicleId]);
 
   const fetchVehicle = async () => {
@@ -67,6 +86,7 @@ export default function EditVehiclePage() {
         brand: vehicle.brand,
         model: vehicle.model,
         color: vehicle.color,
+        parking_area: vehicle.parking_area.toString(),
         is_active: vehicle.is_active
       };
       
@@ -77,6 +97,19 @@ export default function EditVehiclePage() {
       setError('No se pudo cargar la información del vehículo');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchParkingAreas = async () => {
+    try {
+      setLoadingAreas(true);
+      const response = await parkingService.getAvailableParkingAreas();
+      setAreas(response);
+    } catch (err) {
+      console.error('Error fetching parking areas:', err);
+      setError('No se pudieron cargar las áreas de estacionamiento');
+    } finally {
+      setLoadingAreas(false);
     }
   };
 
@@ -111,6 +144,19 @@ export default function EditVehiclePage() {
       newErrors.color = 'El color es requerido';
     } else if (formData.color.length < 3) {
       newErrors.color = 'El color debe tener al menos 3 caracteres';
+    }
+    
+    // Validar área de estacionamiento
+    if (!formData.parking_area) {
+      newErrors.parking_area = 'Debe seleccionar un área de estacionamiento';
+    } else {
+      const selectedArea = areas.find(area => area.id === parseInt(formData.parking_area));
+      const originalArea = originalData?.parking_area;
+      
+      // Solo validar capacidad si cambió de área
+      if (selectedArea && formData.parking_area !== originalArea && selectedArea.available_spots <= 0) {
+        newErrors.parking_area = 'El área seleccionada no tiene espacios disponibles';
+      }
     }
     
     setErrors(newErrors);
@@ -153,7 +199,12 @@ export default function EditVehiclePage() {
     setSuccess('');
     
     try {
-      await parkingService.updateVehicle(vehicleId, formData);
+      const updateData = {
+        ...formData,
+        parking_area: parseInt(formData.parking_area)
+      };
+      
+      await parkingService.updateVehicle(vehicleId, updateData);
       setSuccess('Vehículo actualizado correctamente');
       
       // Actualizar datos originales
@@ -188,11 +239,15 @@ export default function EditVehiclePage() {
     }
   };
 
-  if (loading) {
+  const getSelectedArea = () => {
+    return areas.find(area => area.id === parseInt(formData.parking_area));
+  };
+
+  if (loading || loadingAreas) {
     return (
       <DashboardLayout>
         <div className="flex justify-center items-center h-64">
-          <Loading size="lg" message="Cargando información del vehículo..." />
+          <Loading size="lg" message="Cargando información..." />
         </div>
       </DashboardLayout>
     );
@@ -202,11 +257,22 @@ export default function EditVehiclePage() {
     <DashboardLayout>
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Editar Vehículo</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Actualice la información de su vehículo
-            </p>
+          <div className="flex items-center space-x-4">
+            <Link 
+              href="/parking/vehicles"
+              className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Volver
+            </Link>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">Editar Vehículo</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Actualice la información de su vehículo
+              </p>
+            </div>
           </div>
         </div>
 
@@ -251,6 +317,51 @@ export default function EditVehiclePage() {
                       <p className="mt-1 text-sm text-red-600">{errors.license_plate}</p>
                     )}
                   </div>
+                </div>
+
+                {/* Área de Estacionamiento */}
+                <div className="sm:col-span-3">
+                  <label htmlFor="parking_area" className="block text-sm font-medium text-gray-700">
+                    Área de Estacionamiento <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1">
+                    <select
+                      name="parking_area"
+                      id="parking_area"
+                      required
+                      value={formData.parking_area}
+                      onChange={handleChange}
+                      className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                        errors.parking_area ? 'border-red-300' : ''
+                      }`}
+                    >
+                      <option value="">Seleccione un área</option>
+                      {areas.map(area => {
+                        const isCurrentArea = area.id.toString() === originalData?.parking_area;
+                        const hasAvailability = area.available_spots > 0 || isCurrentArea;
+                        
+                        return (
+                          <option 
+                            key={area.id} 
+                            value={area.id}
+                            disabled={!hasAvailability}
+                          >
+                            {area.name} ({area.available_spots}/{area.max_capacity} disponibles)
+                            {!hasAvailability && ' - LLENO'}
+                            {isCurrentArea && ' - ACTUAL'}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {errors.parking_area && (
+                      <p className="mt-1 text-sm text-red-600">{errors.parking_area}</p>
+                    )}
+                  </div>
+                  {formData.parking_area && getSelectedArea() && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {formData.parking_area === originalData?.parking_area ? 'Área actual' : 'Nueva área'}: {getSelectedArea()?.name}
+                    </p>
+                  )}
                 </div>
 
                 {/* Marca */}
@@ -310,7 +421,7 @@ export default function EditVehiclePage() {
                 </div>
 
                 {/* Color */}
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-6">
                   <label htmlFor="color" className="block text-sm font-medium text-gray-700">
                     Color <span className="text-red-500">*</span>
                   </label>
@@ -355,10 +466,10 @@ export default function EditVehiclePage() {
                     </div>
                     <div className="ml-3 text-sm">
                       <label htmlFor="is_active" className="font-medium text-gray-700">
-                        Vehículo adentro del edificio
+                        Vehículo adentro del área de estacionamiento
                       </label>
                       <p className="text-gray-500">
-                        Marque si el vehículo está actualmente adentro del edificio
+                        Marque si el vehículo está actualmente dentro del área asignada
                       </p>
                     </div>
                   </div>
@@ -371,6 +482,7 @@ export default function EditVehiclePage() {
                 <p className="text-sm text-blue-700">
                   <span className="font-semibold">Placa:</span> {formData.license_plate} | 
                   <span className="font-semibold ml-2">Vehículo:</span> {formData.brand} {formData.model} {formData.color} |
+                  <span className="font-semibold ml-2">Área:</span> {getSelectedArea()?.name || 'No seleccionada'} |
                   <span className="font-semibold ml-2">Estado:</span> {formData.is_active ? 'Adentro' : 'Afuera'}
                 </p>
               </div>
@@ -379,19 +491,22 @@ export default function EditVehiclePage() {
                 <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
                   <p className="text-sm text-yellow-800">
                     Tienes cambios sin guardar
+                    {formData.parking_area !== originalData?.parking_area && (
+                      <span className="block mt-1 font-medium">
+                        ⚠️ Cambiar de área afectará el contador de ocupación
+                      </span>
+                    )}
                   </p>
                 </div>
               )}
 
               <div className="flex justify-end space-x-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => router.push('/parking/vehicles')}
-                  disabled={saving}
+                <Link
+                  href="/parking/vehicles"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Cancelar
-                </Button>
+                </Link>
                 {hasChanges() && (
                   <Button
                     type="button"
