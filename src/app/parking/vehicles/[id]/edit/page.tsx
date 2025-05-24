@@ -1,4 +1,3 @@
-// src/app/parking/vehicles/[id]/edit/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -356,10 +355,10 @@ export default function EditVehiclePage() {
                     </div>
                     <div className="ml-3 text-sm">
                       <label htmlFor="is_active" className="font-medium text-gray-700">
-                        Vehículo activo
+                        Vehículo adentro del edificio
                       </label>
                       <p className="text-gray-500">
-                        Desmarque esta opción si el vehículo ya no está en uso
+                        Marque si el vehículo está actualmente adentro del edificio
                       </p>
                     </div>
                   </div>
@@ -372,7 +371,7 @@ export default function EditVehiclePage() {
                 <p className="text-sm text-blue-700">
                   <span className="font-semibold">Placa:</span> {formData.license_plate} | 
                   <span className="font-semibold ml-2">Vehículo:</span> {formData.brand} {formData.model} {formData.color} |
-                  <span className="font-semibold ml-2">Estado:</span> {formData.is_active ? 'Activo' : 'Inactivo'}
+                  <span className="font-semibold ml-2">Estado:</span> {formData.is_active ? 'Adentro' : 'Afuera'}
                 </p>
               </div>
 

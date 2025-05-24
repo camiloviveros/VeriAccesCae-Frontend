@@ -8,6 +8,7 @@ export interface ParkingAreaResponse {
   max_capacity: number;
   current_count: number;
   is_active: boolean;
+  available_spots?: number;
   [key: string]: any;
 }
 
@@ -189,14 +190,30 @@ export const updateVehicle = async (id: string | number, data: VehicleUpdateData
 
 export const deleteVehicle = async (id: string | number): Promise<void> => {
   try {
+    console.log(`Eliminando vehículo ${id}...`);
     await apiClient.delete(`/parking/vehicles/${id}/`);
     
     // Disparar evento para actualizar otras partes de la aplicación
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('vehicleDeleted'));
     }
+    
+    console.log(`Vehículo ${id} eliminado correctamente`);
   } catch (error) {
     console.error(`Error deleting vehicle ${id}:`, error);
+    
+    // Mejorar el manejo de errores
+    const err = error as any;
+    if (err.response?.data?.error) {
+      throw new Error(err.response.data.error);
+    } else if (err.response?.status === 403) {
+      throw new Error('No tienes permisos para eliminar este vehículo');
+    } else if (err.response?.status === 404) {
+      throw new Error('El vehículo no fue encontrado');
+    } else if (err.response?.status === 400) {
+      throw new Error(err.response.data?.error || 'No se puede eliminar el vehículo');
+    }
+    
     throw error;
   }
 };
@@ -328,7 +345,7 @@ export const checkVehicleAccess = async (vehicleId: string | number, areaId: str
 
 export const getParkingStats = async (): Promise<ParkingStatsResponse> => {
   try {
-    const response = await apiClient.get<ParkingStatsResponse>('/parking/stats/');
+    const response = await apiClient.get<ParkingStatsResponse>('/parking/areas/stats/');
     return response.data;
   } catch (error) {
     console.error("Error getting parking stats:", error);

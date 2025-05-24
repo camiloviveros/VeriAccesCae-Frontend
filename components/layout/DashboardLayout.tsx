@@ -85,7 +85,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Control de Acceso', href: '/access', icon: ShieldCheckIcon },
     { name: 'Visitantes', href: '/access/visitors', icon: UsersIcon },
     { name: 'Escanear QR', href: '/access/scan', icon: QrCodeIcon },
-    { name: 'Vehículos', href: '/parking/vehicles', icon: TruckIcon },
+    { name: 'Vehículos', href: '/parking', icon: TruckIcon },
     { name: 'Seguridad', href: '/security', icon: ShieldCheckIcon },
     { name: 'Reportes', href: '/reports', icon: DocumentTextIcon },
   ];
