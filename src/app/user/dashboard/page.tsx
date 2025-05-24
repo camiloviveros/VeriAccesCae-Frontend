@@ -113,10 +113,8 @@ export default function UserDashboardPage() {
       setMyVisits(visitsList);
       setPendingVisits(visitsList.filter(v => v.status === 'pending'));
       
-      // CORREGIDO: Los visitantes aprobados incluyen todos los estados post-aprobación
-      setApprovedVisits(visitsList.filter(v => 
-        v.status === 'approved' || v.status === 'inside' || v.status === 'outside'
-      ));
+      // Los visitantes aprobados son aquellos con estado 'approved'
+      setApprovedVisits(visitsList.filter(v => v.status === 'approved'));
       
       setDeniedVisits(visitsList.filter(v => v.status === 'denied'));
     } catch (err) {
@@ -156,7 +154,7 @@ export default function UserDashboardPage() {
       case 'inside':
         return <Badge className="bg-green-600 text-white">Dentro del edificio</Badge>;
       case 'outside':
-        return <Badge className="bg-green-700 text-white">Fuera del edificio</Badge>;
+        return <Badge className="bg-gray-600 text-white">Fuera del edificio</Badge>;
       case 'approved':
         return <Badge className="bg-blue-600 text-white">Aprobado - Generar QR</Badge>;
       case 'denied':
@@ -195,8 +193,8 @@ export default function UserDashboardPage() {
 
   // CORREGIDO: Función para determinar si se puede mostrar QR
   const canShowQR = (visit: Visit) => {
-    // Solo se puede mostrar QR si el visitante está aprobado o en estados posteriores
-    return visit.status === 'approved' || visit.status === 'inside' || visit.status === 'outside';
+    // Solo se puede mostrar QR si el visitante está aprobado
+    return visit.status === 'approved';
   };
 
   const getStatusDescription = (status?: string) => {

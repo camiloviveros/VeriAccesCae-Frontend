@@ -1,4 +1,3 @@
-// src/app/user/visits/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,7 +13,7 @@ interface Visit {
   id: number;
   first_name: string;
   last_name: string;
-  status?: 'pending' | 'inside' | 'outside' | 'denied';
+  status?: 'pending' | 'approved' | 'inside' | 'outside' | 'denied';
   created_at: string;
   visitor_type?: string;
   apartment_number?: string;
@@ -98,7 +97,7 @@ export default function MyVisitsPage() {
         setFilteredVisits(visits.filter(v => v.status === 'pending'));
         break;
       case 'approved':
-        setFilteredVisits(visits.filter(v => v.status === 'inside' || v.status === 'outside'));
+        setFilteredVisits(visits.filter(v => v.status === 'approved' || v.status === 'inside' || v.status === 'outside'));
         break;
       case 'denied':
         setFilteredVisits(visits.filter(v => v.status === 'denied'));
@@ -112,9 +111,11 @@ export default function MyVisitsPage() {
   const getStatusBadge = (status?: string) => {
     switch(status) {
       case 'inside':
-        return <Badge className="bg-green-500 text-white">Aprobado - Dentro</Badge>;
+        return <Badge className="bg-green-500 text-white">Dentro del edificio</Badge>;
       case 'outside':
-        return <Badge className="bg-green-600 text-white">Aprobado - Fuera</Badge>;
+        return <Badge className="bg-gray-600 text-white">Fuera del edificio</Badge>;
+      case 'approved':
+        return <Badge className="bg-blue-500 text-white">Aprobado - QR Disponible</Badge>;
       case 'denied':
         return <Badge className="bg-red-500 text-white">Denegado</Badge>;
       default:
@@ -151,7 +152,7 @@ export default function MyVisitsPage() {
       case 'pending':
         return visits.filter(v => v.status === 'pending').length;
       case 'approved':
-        return visits.filter(v => v.status === 'inside' || v.status === 'outside').length;
+        return visits.filter(v => v.status === 'approved' || v.status === 'inside' || v.status === 'outside').length;
       case 'denied':
         return visits.filter(v => v.status === 'denied').length;
       default:
@@ -160,7 +161,7 @@ export default function MyVisitsPage() {
   };
 
   const canShowQR = (visit: Visit) => {
-    return visit.status === 'inside' || visit.status === 'outside';
+    return visit.status === 'approved' || visit.status === 'inside' || visit.status === 'outside';
   };
 
   return (

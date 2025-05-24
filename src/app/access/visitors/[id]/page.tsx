@@ -1,4 +1,3 @@
-// src/app/access/visitors/[id]/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -21,7 +20,7 @@ interface Visitor {
   company?: string;
   photo?: string;
   created_at: string;
-  status?: 'pending' | 'inside' | 'outside' | 'denied';
+  status?: 'pending' | 'approved' | 'inside' | 'outside' | 'denied';
 }
 
 export default function VisitorDetailPage() {
@@ -82,10 +81,12 @@ export default function VisitorDetailPage() {
         return <Badge variant="success">Dentro</Badge>;
       case 'outside':
         return <Badge variant="secondary">Fuera</Badge>;
+      case 'approved':
+        return <Badge variant="info">Aprobado</Badge>;
       case 'denied':
         return <Badge variant="destructive">Denegado</Badge>;
       default:
-        return <Badge variant="info">Pendiente</Badge>;
+        return <Badge variant="warning">Pendiente</Badge>;
     }
   };
 
@@ -108,11 +109,6 @@ export default function VisitorDetailPage() {
             <Button variant="outline" onClick={() => router.push('/access/visitors')}>
               Volver
             </Button>
-            <Link href={`/access/visitors/${visitorId}/qr`} passHref>
-              <Button className="bg-green-600 hover:bg-green-700">
-                Generar Código QR
-              </Button>
-            </Link>
           </div>
         </div>
 
@@ -200,7 +196,8 @@ export default function VisitorDetailPage() {
                   <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                     {visitor.status === 'inside' ? 'Dentro del edificio' : 
                      visitor.status === 'outside' ? 'Fuera del edificio' :
-                     visitor.status === 'denied' ? 'Acceso denegado' : 'Pendiente de acceso'}
+                     visitor.status === 'approved' ? 'Aprobado - QR disponible' :
+                     visitor.status === 'denied' ? 'Acceso denegado' : 'Pendiente de aprobación'}
                   </dd>
                 </div>
               </dl>
@@ -211,21 +208,13 @@ export default function VisitorDetailPage() {
                 <h3 className="text-lg leading-6 font-medium text-gray-900">Acciones</h3>
               </div>
               <div className="mt-4 flex flex-wrap gap-3">
-                <Link href={`/access/visitors/${visitorId}/qr`} passHref>
-                  <Button className="bg-green-600 hover:bg-green-700">
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                    </svg>
-                    Generar código QR
-                  </Button>
-                </Link>
                 {visitor.status === 'pending' && (
                   <Button 
                     className="bg-blue-600 hover:bg-blue-700"
                     onClick={async () => {
                       try {
-                        await accessService.updateVisitorStatus(visitor.id, 'inside');
-                        setVisitor({...visitor, status: 'inside'});
+                        await accessService.updateVisitorStatus(visitor.id, 'approved');
+                        setVisitor({...visitor, status: 'approved'});
                       } catch (err) {
                         console.error('Error updating status:', err);
                         setError('Error al actualizar el estado del visitante');
@@ -235,7 +224,7 @@ export default function VisitorDetailPage() {
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    Permitir acceso
+                    Aprobar solicitud
                   </Button>
                 )}
                 {visitor.status === 'inside' && (
@@ -261,6 +250,10 @@ export default function VisitorDetailPage() {
                   variant="outline"
                   className="border-red-300 text-red-700 hover:bg-red-50"
                   onClick={async () => {
+                    if (visitor.status === 'inside') {
+                      setError('No se puede eliminar un visitante que está dentro del edificio');
+                      return;
+                    }
                     if (confirm('¿Está seguro que desea eliminar este visitante?')) {
                       try {
                         await accessService.deleteVisitor(visitor.id);
@@ -271,6 +264,7 @@ export default function VisitorDetailPage() {
                       }
                     }
                   }}
+                  disabled={visitor.status === 'inside'}
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -278,6 +272,13 @@ export default function VisitorDetailPage() {
                   Eliminar visitante
                 </Button>
               </div>
+              {visitor.status === 'approved' && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <strong>Nota:</strong> El visitante ha sido aprobado. El código QR debe ser generado desde la interfaz del usuario.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         ) : !error ? (

@@ -1,4 +1,3 @@
-// src/app/user/visits/[id]/qr/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -75,47 +74,44 @@ export default function VisitorQRPage() {
       
       setVisitor(foundVisitor);
       
-      // Check if visitor has approved status and try to get QR
-      if (foundVisitor.status === 'inside' || foundVisitor.status === 'outside') {
+      // Check if visitor has approved status
+      if (foundVisitor.status === 'approved' || foundVisitor.status === 'inside' || foundVisitor.status === 'outside') {
         try {
-          // Try to create visitor access first
+          // Create visitor access to get QR
           const accessData = {
             visitor: foundVisitor.id,
-            purpose: 'Visita autorizada',
+            purpose: `Visita ${foundVisitor.visitor_type === 'temporary' ? 'temporal' : 
+                              foundVisitor.visitor_type === 'business' ? 'empresarial' : 'regular'}`,
             valid_from: new Date().toISOString(),
-            valid_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Valid for 24 hours
+            valid_to: foundVisitor.visitor_type === 'temporary' && foundVisitor.exit_date ? 
+                      foundVisitor.exit_date : 
+                      new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Valid for 24 hours by default
             access_zones: [1] // Default access zone
           };
           
-          let accessResponse;
-          try {
-            accessResponse = await accessService.createVisitorAccess(accessData);
-          } catch (accessError) {
-            console.log('Access already exists or error creating access:', accessError);
-            // If access creation fails, try to get QR directly
-            try {
-              const qrResponse = await accessService.getQRCode(foundVisitor.id);
-              setQrImage(qrResponse.qr_code_image);
-              setSuccess('Código QR disponible para la visita aprobada');
-              return;
-            } catch (qrError) {
-              console.error('Error getting QR directly:', qrError);
-              throw qrError;
-            }
-          }
+          // Try to create visitor access
+          const accessResponse = await accessService.createVisitorAccess(accessData);
           
           if (accessResponse && accessResponse.id) {
             // Get QR image
             const qrResponse = await accessService.getQRCode(accessResponse.id);
             setQrImage(qrResponse.qr_code_image);
-            setSuccess('Código QR generado para la visita aprobada');
+            setSuccess('Código QR generado exitosamente');
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error('Error fetching QR:', err);
-          setError('Error al generar el código QR. La visita ha sido aprobada pero aún no está disponible el QR. Intente más tarde o contacte al administrador.');
+          // If access already exists, try to get existing QR
+          if (err.response?.status === 400 || err.response?.data?.detail?.includes('already exists')) {
+            // Try to find existing access and get QR
+            setError('El código QR ya fue generado anteriormente. Por favor, contacte al administrador.');
+          } else {
+            setError('Error al generar el código QR. Intente más tarde.');
+          }
         }
-      } else {
+      } else if (foundVisitor.status === 'pending') {
         setError('La visita aún no ha sido aprobada por administración. El código QR estará disponible una vez aprobada.');
+      } else if (foundVisitor.status === 'denied') {
+        setError('La visita ha sido denegada por administración. No se puede generar código QR.');
       }
     } catch (err) {
       console.error('Error fetching visitor data:', err);
@@ -128,9 +124,11 @@ export default function VisitorQRPage() {
   const getStatusBadge = (status?: string) => {
     switch(status) {
       case 'inside':
-        return <Badge className="bg-green-500 text-white text-sm px-3 py-1">✅ Aprobado - Puede Ingresar</Badge>;
+        return <Badge className="bg-green-500 text-white text-sm px-3 py-1">✅ Dentro del edificio</Badge>;
       case 'outside':
-        return <Badge className="bg-green-600 text-white text-sm px-3 py-1">✅ Aprobado - Fuera</Badge>;
+        return <Badge className="bg-gray-600 text-white text-sm px-3 py-1">✅ Fuera del edificio</Badge>;
+      case 'approved':
+        return <Badge className="bg-blue-500 text-white text-sm px-3 py-1">✅ Aprobado - QR Disponible</Badge>;
       case 'denied':
         return <Badge className="bg-red-500 text-white text-sm px-3 py-1">❌ Denegado</Badge>;
       default:
@@ -218,7 +216,7 @@ export default function VisitorQRPage() {
             </h1>
           </div>
           
-          {error && (
+          {error && !qrImage && (
             <Alert variant="error" className="mb-6 border-red-500 bg-red-50">
               <AlertTitle className="text-red-800">⚠️ Estado de la Visita</AlertTitle>
               <p className="text-red-700 text-sm mt-1">{error}</p>
@@ -361,7 +359,7 @@ export default function VisitorQRPage() {
                       )}
                       <li className="flex items-start">
                         <span className="font-medium mr-2">{visitor.visitor_type === 'temporary' ? '5.' : '4.'}</span>
-                        Conserve este código hasta completar su visita
+                        Una vez utilizado, el visitante aparecerá como "dentro del edificio"
                       </li>
                     </ul>
                   </div>
@@ -454,7 +452,7 @@ export default function VisitorQRPage() {
                         <div className="ml-3">
                           <h4 className="text-sm font-medium text-yellow-800">Estado Actual</h4>
                           <p className="text-sm text-yellow-700 mt-1">
-                            Visita <strong>pendiente de aprobación</strong> por parte del administrador del edificio.
+                            Visita <strong>{visitor.status === 'denied' ? 'denegada' : 'pendiente de aprobación'}</strong> por parte del administrador del edificio.
                           </p>
                         </div>
                       </div>

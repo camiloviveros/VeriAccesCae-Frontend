@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,11 +22,11 @@ interface Visitor {
   visitor_type?: string;
   entry_date?: string;
   exit_date?: string;
-  status?: 'pending' | 'inside' | 'outside' | 'denied';
+  status?: 'pending' | 'approved' | 'inside' | 'outside' | 'denied';
 }
 
-const parseVisitorStatus = (status?: string): 'pending' | 'inside' | 'outside' | 'denied' => {
-  if (status === 'pending' || status === 'inside' || status === 'outside' || status === 'denied') {
+const parseVisitorStatus = (status?: string): 'pending' | 'approved' | 'inside' | 'outside' | 'denied' => {
+  if (status === 'pending' || status === 'approved' || status === 'inside' || status === 'outside' || status === 'denied') {
     return status;
   }
   return 'pending';
@@ -102,6 +101,12 @@ export default function AccessControlPage() {
 
   // Función para eliminar visitante SIN confirmación
   const handleDeleteVisitor = async (visitor: Visitor) => {
+    // No permitir eliminar si el visitante está dentro
+    if (visitor.status === 'inside') {
+      setError('No se puede eliminar un visitante que está dentro del edificio. Debe registrar su salida primero.');
+      return;
+    }
+
     const visitorName = `${visitor.first_name} ${visitor.last_name}`;
     const visitorId = visitor.id;
     
@@ -465,9 +470,15 @@ export default function AccessControlPage() {
                         onClick={() => handleDeleteVisitor(visitor)}
                         variant="outline"
                         size="sm"
-                        className="border-red-400 text-red-600 hover:bg-red-50 hover:border-red-500 disabled:bg-gray-200 disabled:border-gray-300 disabled:text-gray-400"
-                        title={`Eliminar visitante ${visitor.first_name} ${visitor.last_name}`}
-                        disabled={processingIds.has(visitor.id)}
+                        className={visitor.status === 'inside' ? 
+                          "border-gray-300 text-gray-400 cursor-not-allowed" :
+                          "border-red-400 text-red-600 hover:bg-red-50 hover:border-red-500"
+                        }
+                        title={visitor.status === 'inside' ? 
+                          "No se puede eliminar un visitante que está dentro del edificio" :
+                          `Eliminar visitante ${visitor.first_name} ${visitor.last_name}`
+                        }
+                        disabled={processingIds.has(visitor.id) || visitor.status === 'inside'}
                       >
                         {processingIds.has(visitor.id) ? '⏳' : '🗑️'} Eliminar
                       </Button>
@@ -495,7 +506,7 @@ export default function AccessControlPage() {
             <div className="px-4 py-5 sm:px-6 bg-green-50 border-b border-gray-200">
               <h2 className="text-lg font-medium text-green-900">Visitantes Dentro del Edificio</h2>
               <p className="mt-1 text-sm text-green-700">
-                Visitantes que actualmente tienen acceso y están dentro del edificio.
+                Visitantes que actualmente están dentro del edificio.
               </p>
             </div>
             
