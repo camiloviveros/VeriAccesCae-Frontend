@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -48,16 +49,9 @@ export default function AccessControlPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
   const [peopleInside, setPeopleInside] = useState<Visitor[]>([]);
-  const [occupancyCount, setOccupancyCount] = useState(0);
-  const maxOccupancy = 100;
 
   useEffect(() => {
     fetchVisitors();
-    
-    const storedCount = localStorage.getItem('occupancyCount');
-    if (storedCount) {
-      setOccupancyCount(parseInt(storedCount, 10));
-    }
     
     const handleVisitorChange = () => {
       console.log('Evento detectado, recargando visitantes...');
@@ -106,7 +100,7 @@ export default function AccessControlPage() {
     }
   };
 
-  // Función para eliminar visitante sin confirmación
+  // Función para eliminar visitante SIN confirmación
   const handleDeleteVisitor = async (visitor: Visitor) => {
     const visitorName = `${visitor.first_name} ${visitor.last_name}`;
     const visitorId = visitor.id;
@@ -131,14 +125,6 @@ export default function AccessControlPage() {
       // Actualizar visitantes dentro si el visitante estaba dentro
       const updatedPeopleInside = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(updatedPeopleInside);
-      
-      // Actualizar contador de aforo si es necesario
-      if (visitor.status === 'inside') {
-        const newCount = Math.max(0, occupancyCount - 1);
-        setOccupancyCount(newCount);
-        localStorage.setItem('occupancyCount', newCount.toString());
-        console.log(`📊 Aforo actualizado: ${newCount}`);
-      }
       
       // Mostrar mensaje de éxito
       setSuccessMessage(`✅ Visitante ${visitorName} eliminado correctamente`);
@@ -186,31 +172,30 @@ export default function AccessControlPage() {
     }
   };
 
-  // Función para permitir acceso
+  // Función para permitir acceso - CORREGIDA: Solo da permiso para generar QR
   const handleAllowAccess = async (visitor: Visitor) => {
     if (!visitor || processingIds.has(visitor.id)) return;
     
     setProcessingIds(prev => new Set(prev).add(visitor.id));
     
     try {
-      console.log(`✅ Permitiendo acceso a: ${visitor.first_name} ${visitor.last_name}`);
-      await accessService.updateVisitorStatus(visitor.id, 'inside');
+      console.log(`✅ Dando permiso de acceso a: ${visitor.first_name} ${visitor.last_name}`);
+      
+      // Cambiar estado a 'approved' para permitir generación de QR
+      await accessService.updateVisitorStatus(visitor.id, 'approved');
       
       const updatedVisitors = visitors.map(v => 
-        v.id === visitor.id ? {...v, status: 'inside' as const} : v
+        v.id === visitor.id ? {...v, status: 'approved' as const} : v
       );
       setVisitors(updatedVisitors);
       
-      const insideVisitors = updatedVisitors.filter(v => v.status === 'inside');
-      setPeopleInside(insideVisitors);
-      
-      setSuccessMessage(`✅ Acceso permitido a ${visitor.first_name} ${visitor.last_name}`);
+      setSuccessMessage(`✅ Permiso concedido a ${visitor.first_name} ${visitor.last_name}. Ahora puede generar código QR.`);
       setTimeout(() => setSuccessMessage(''), 3000);
       
       window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
-      console.error('❌ Error permitiendo acceso:', err);
-      setError('Error al permitir acceso al visitante');
+      console.error('❌ Error concediendo permiso:', err);
+      setError('Error al conceder permiso al visitante');
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
@@ -291,10 +276,12 @@ export default function AccessControlPage() {
         return <Badge variant="success" className="bg-green-500 text-white">Dentro</Badge>;
       case 'outside':
         return <Badge variant="secondary" className="bg-gray-500 text-white">Fuera</Badge>;
+      case 'approved':
+        return <Badge variant="info" className="bg-blue-500 text-white">Aprobado</Badge>;
       case 'denied':
         return <Badge variant="destructive" className="bg-red-500 text-white">Denegado</Badge>;
       default:
-        return <Badge variant="info" className="bg-blue-500 text-white">Pendiente</Badge>;
+        return <Badge variant="warning" className="bg-yellow-500 text-white">Pendiente</Badge>;
     }
   };
 
@@ -311,7 +298,16 @@ export default function AccessControlPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-gray-900">Control de Acceso - Administración</h1>
+          <div className="flex items-center space-x-4">
+            <Button 
+              onClick={() => router.push('/dashboard')}
+              variant="outline"
+              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              ← Volver al Dashboard
+            </Button>
+            <h1 className="text-2xl font-semibold text-gray-900">Control de Acceso - Administración</h1>
+          </div>
           <div className="flex space-x-2">
             <Button 
               onClick={forceRefresh}
@@ -352,9 +348,6 @@ export default function AccessControlPage() {
             <div className="mt-2 flex items-center space-x-4">
               <div className="text-sm text-gray-700">
                 <span className="font-medium">Visitantes dentro:</span> {peopleInside.length}
-              </div>
-              <div className="text-sm text-gray-700">
-                <span className="font-medium">Capacidad máxima:</span> {maxOccupancy}
               </div>
               <div className="text-sm text-gray-700">
                 <span className="font-medium">Total visitantes:</span> {visitors.length}
@@ -438,9 +431,9 @@ export default function AccessControlPage() {
                             size="sm"
                             disabled={processingIds.has(visitor.id)}
                             className="bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400"
-                            title={`Permitir acceso a ${visitor.first_name} ${visitor.last_name}`}
+                            title={`Dar permiso a ${visitor.first_name} ${visitor.last_name}`}
                           >
-                            {processingIds.has(visitor.id) ? '⏳' : '✅'} Permitir
+                            {processingIds.has(visitor.id) ? '⏳' : '✅'} Dar Permiso
                           </Button>
                           <Button 
                             onClick={() => handleDenyAccess(visitor)}

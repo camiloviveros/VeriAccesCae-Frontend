@@ -1,7 +1,8 @@
-// src/app/access/visitors/page.tsx - Página de visitantes corregida
+// src/app/access/visitors/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import DashboardLayout from '../../../../components/layout/DashboardLayout';
 import { accessService } from '../../../../lib/api';
 import { Badge } from '../../../../components/ui/Badge';
@@ -30,6 +31,7 @@ interface Visitor {
 type FilterType = 'all' | 'pending' | 'approved' | 'denied';
 
 export default function VisitorsPage() {
+  const router = useRouter();
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [filteredVisitors, setFilteredVisitors] = useState<Visitor[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
@@ -176,11 +178,20 @@ export default function VisitorsPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Gestión de Visitantes</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Administre todos los visitantes registrados en el sistema.
-            </p>
+          <div className="flex items-center space-x-4">
+            <Button 
+              onClick={() => router.push('/dashboard')}
+              variant="outline"
+              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              ← Volver al Dashboard
+            </Button>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">Gestión de Visitantes</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Administre todos los visitantes registrados en el sistema.
+              </p>
+            </div>
           </div>
           <div className="flex space-x-2">
             <Button 
@@ -397,6 +408,7 @@ export default function VisitorsPage() {
                       >
                         👁️ Ver Detalles
                       </Link>
+                      {/* NO HAY BOTÓN DE QR - Solo en la interfaz de usuario */}
                     </div>
                   </div>
                 </li>
@@ -431,23 +443,21 @@ export default function VisitorsPage() {
         </div>
 
         {/* Information Card */}
-        <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
           <div className="flex items-start">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="ml-3">
-              <h4 className="text-sm font-medium text-blue-800">Información</h4>
-              <p className="text-sm text-blue-700 mt-1">
-                Desde aquí puede gestionar todos los visitantes del sistema. 
-                Para controlar el acceso físico al edificio, utilice la sección
-                <Link href="/access/control" className="font-medium underline hover:text-blue-800">
-                  {' '}Control de Acceso
-                </Link>.
-                Los visitantes pueden registrarse desde la interfaz de usuario o ser creados desde administración.
-              </p>
+              <h4 className="text-sm font-medium text-yellow-800">Gestión Administrativa de Visitantes</h4>
+              <div className="text-sm text-yellow-700 mt-1 space-y-1">
+                <p>• <strong>Desde Administración:</strong> Solo se pueden crear visitantes, NO generar códigos QR.</p>
+                <p>• <strong>Códigos QR:</strong> Solo se generan desde la interfaz de usuario después de aprobación.</p>
+                <p>• <strong>Control de Acceso:</strong> Use la sección correspondiente para aprobar/denegar visitantes.</p>
+                <p>• <strong>Flujo:</strong> Crear visitante → Control de Acceso → Aprobar → Usuario genera QR → Escanear QR.</p>
+              </div>
             </div>
           </div>
         </div>
