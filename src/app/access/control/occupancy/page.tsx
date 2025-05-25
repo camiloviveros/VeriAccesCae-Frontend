@@ -1,3 +1,4 @@
+// src/app/access/control/occupancy/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,101 +8,123 @@ import { Button } from '../../../../../components/ui/Button';
 import { Alert, AlertTitle } from '../../../../../components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../../../../components/ui/Card';
 import { accessService } from '../../../../../lib/api';
+import { Loading } from '../../../../../components/ui/Loading';
+
+interface OccupancyData {
+  id: number;
+  residents_count: number;
+  visitors_count: number;
+  total_count: number;
+  max_capacity: number;
+  last_updated: string;
+}
 
 export default function OccupancyControlPage() {
   const router = useRouter();
-  const [occupancyCount, setOccupancyCount] = useState(0);
-  const [maxOccupancy, setMaxOccupancy] = useState(100);
+  const [occupancyData, setOccupancyData] = useState<OccupancyData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState('');
-  const [visitorsInside, setVisitorsInside] = useState(0);
-  const [totalInside, setTotalInside] = useState(0);
-  
-  // Obtener datos iniciales del aforo y visitantes
+  const [error, setError] = useState('');
+
+  // Cargar datos de aforo desde la API
   useEffect(() => {
-    // Carga desde localStorage (contador de residentes)
-    const storedCount = localStorage.getItem('occupancyCount');
-    if (storedCount) {
-      const count = parseInt(storedCount, 10);
-      setOccupancyCount(count);
-    }
-    
-    // Cargar visitantes desde API
-    const fetchVisitors = async () => {
-      try {
-        const response = await accessService.getVisitors();
-        
-        // Procesar la respuesta
-        let visitors = [];
-        if (Array.isArray(response)) {
-          visitors = response;
-        } else if (response.results && Array.isArray(response.results)) {
-          visitors = response.results;
-        } else if (typeof response === 'object') {
-          visitors = Object.values(response).filter(v => 
-            typeof v === 'object' && v !== null && 'id' in v
-          );
-        }
-        
-        // Contar visitantes con estado 'inside'
-        const insideCount = visitors.filter(v => v.status === 'inside').length;
-        setVisitorsInside(insideCount);
-        
-        // Actualizar total
-        const residentCount = parseInt(storedCount || '0', 10);
-        setTotalInside(residentCount + insideCount);
-      } catch (err) {
-        console.error('Error fetching visitors:', err);
-      }
-    };
-    
-    fetchVisitors();
+    fetchOccupancyData();
+
+    // Actualizar cada 5 segundos
+    const interval = setInterval(() => {
+      fetchOccupancyData();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
-  
-  // Actualizar el total cuando cambia el contador o los visitantes
-  useEffect(() => {
-    setTotalInside(occupancyCount + visitorsInside);
-  }, [occupancyCount, visitorsInside]);
-  
-  // Guardar cambios en localStorage cuando el contador cambie
-  useEffect(() => {
-    localStorage.setItem('occupancyCount', occupancyCount.toString());
-  }, [occupancyCount]);
-  
-  const handleAddPerson = () => {
-    if (occupancyCount < maxOccupancy) {
-      setOccupancyCount(prevCount => prevCount + 1);
-      setMessage('Persona agregada correctamente');
-      // Limpiar mensaje después de 3 segundos
-      setTimeout(() => {
-        setMessage('');
-      }, 3000);
-    } else {
+
+  const fetchOccupancyData = async () => {
+    try {
+      const data = await accessService.getCurrentOccupancy();
+      setOccupancyData(data);
+      setError('');
+    } catch (err) {
+      console.error('Error fetching occupancy data:', err);
+      setError('Error al cargar los datos de aforo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddResident = async () => {
+    if (!occupancyData) return;
+    
+    if (occupancyData.total_count >= occupancyData.max_capacity) {
       setMessage('No se puede agregar más personas. Se ha alcanzado la capacidad máxima.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      const updatedData = await accessService.updateResidentsCount(occupancyData.residents_count + 1);
+      setOccupancyData(updatedData);
+      setMessage('Residente agregado correctamente');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      console.error('Error adding resident:', err);
+      setError('Error al agregar residente');
+    } finally {
+      setUpdating(false);
     }
   };
-  
-  const handleRemovePerson = () => {
-    if (occupancyCount > 0) {
-      setOccupancyCount(prevCount => prevCount - 1);
-      setMessage('Persona removida correctamente');
-      // Limpiar mensaje después de 3 segundos
-      setTimeout(() => {
-        setMessage('');
-      }, 3000);
-    } else {
-      setMessage('No hay personas para remover');
+
+  const handleRemoveResident = async () => {
+    if (!occupancyData) return;
+    
+    if (occupancyData.residents_count <= 0) {
+      setMessage('No hay residentes para remover');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      const updatedData = await accessService.updateResidentsCount(occupancyData.residents_count - 1);
+      setOccupancyData(updatedData);
+      setMessage('Residente removido correctamente');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      console.error('Error removing resident:', err);
+      setError('Error al remover residente');
+    } finally {
+      setUpdating(false);
     }
   };
-  
+
   // Calcular el porcentaje de ocupación
-  const occupancyPercentage = (totalInside / maxOccupancy) * 100;
-  
+  const occupancyPercentage = occupancyData 
+    ? (occupancyData.total_count / occupancyData.max_capacity) * 100 
+    : 0;
+
   // Determinar el color según el porcentaje de ocupación
   const getProgressColor = () => {
     if (occupancyPercentage < 50) return 'bg-green-500';
     if (occupancyPercentage < 80) return 'bg-yellow-500';
     return 'bg-red-500';
   };
+
+  const getProgressBorderColor = () => {
+    if (occupancyPercentage < 50) return 'border-green-500';
+    if (occupancyPercentage < 80) return 'border-yellow-500';
+    return 'border-red-500';
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center h-64">
+          <Loading size="lg" message="Cargando datos de aforo..." />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -111,78 +134,125 @@ export default function OccupancyControlPage() {
           <Button
             onClick={() => router.push('/access/control')}
             variant="outline"
+            className="border-gray-300 text-gray-700 hover:bg-gray-100"
           >
             Volver al Control de Acceso
           </Button>
         </div>
         
-        {message && (
-          <Alert variant={message.includes('No se puede') || message.includes('No hay') ? 'warning' : 'success'}>
-            <AlertTitle>{message}</AlertTitle>
+        {error && (
+          <Alert variant="error" className="border-red-300 bg-red-50">
+            <AlertTitle className="text-red-800">{error}</AlertTitle>
           </Alert>
         )}
         
-        <Card className="w-full">
-          <CardHeader className="bg-gray-50 border-b">
-            <CardTitle className="text-center">Aforo del Edificio</CardTitle>
+        {message && (
+          <Alert variant={message.includes('No se puede') || message.includes('No hay') ? 'warning' : 'success'} 
+                 className={message.includes('No se puede') || message.includes('No hay') ? 'border-yellow-300 bg-yellow-50' : 'border-green-300 bg-green-50'}>
+            <AlertTitle className={message.includes('No se puede') || message.includes('No hay') ? 'text-yellow-800' : 'text-green-800'}>
+              {message}
+            </AlertTitle>
+          </Alert>
+        )}
+        
+        <Card className="w-full shadow-lg border-gray-200">
+          <CardHeader className="bg-gray-50 border-b border-gray-200">
+            <CardTitle className="text-center text-gray-800">Aforo del Edificio</CardTitle>
           </CardHeader>
           <CardContent className="py-8">
             <div className="text-center mb-4">
-              <h2 className="text-5xl font-bold text-gray-900">{totalInside}/{maxOccupancy}</h2>
-              <p className="text-lg text-gray-500 mt-2">Personas totales dentro del edificio</p>
+              <h2 className="text-5xl font-bold text-gray-900">
+                {occupancyData?.total_count || 0}/{occupancyData?.max_capacity || 100}
+              </h2>
+              <p className="text-lg text-gray-600 mt-2">Personas totales dentro del edificio</p>
+              {occupancyData && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Última actualización: {new Date(occupancyData.last_updated).toLocaleTimeString()}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div className="bg-blue-50 p-4 rounded-lg text-center">
-                <h3 className="text-xl font-semibold text-blue-700">{occupancyCount}</h3>
+              <div className="bg-blue-50 p-4 rounded-lg text-center border border-blue-200">
+                <h3 className="text-xl font-semibold text-blue-700">
+                  {occupancyData?.residents_count || 0}
+                </h3>
                 <p className="text-sm text-blue-600">Residentes</p>
               </div>
               
-              <div className="bg-green-50 p-4 rounded-lg text-center">
-                <h3 className="text-xl font-semibold text-green-700">{visitorsInside}</h3>
+              <div className="bg-green-50 p-4 rounded-lg text-center border border-green-200">
+                <h3 className="text-xl font-semibold text-green-700">
+                  {occupancyData?.visitors_count || 0}
+                </h3>
                 <p className="text-sm text-green-600">Visitantes</p>
               </div>
             </div>
             
-            <div className="w-full bg-gray-200 rounded-full h-4 mt-8">
+            <div className={`w-full bg-gray-200 rounded-full h-4 mt-8 border ${getProgressBorderColor()}`}>
               <div 
-                className={`h-4 rounded-full ${getProgressColor()}`} 
+                className={`h-4 rounded-full ${getProgressColor()} transition-all duration-500`} 
                 style={{ width: `${Math.min(occupancyPercentage, 100)}%` }}
               ></div>
             </div>
             
             <div className="flex justify-center space-x-6 mt-8">
               <Button
-                onClick={handleAddPerson}
-                disabled={occupancyCount >= maxOccupancy}
-                className="px-8 py-4 text-lg"
+                onClick={handleAddResident}
+                disabled={updating || (occupancyData && occupancyData.total_count >= occupancyData.max_capacity)}
+                className="px-8 py-4 text-lg bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400"
               >
-                Agregar Residente
+                {updating ? '⏳ Procesando...' : '➕ Agregar Residente'}
               </Button>
               <Button 
                 variant="secondary"
-                onClick={handleRemovePerson}
-                disabled={occupancyCount <= 0}
-                className="px-8 py-4 text-lg"
+                onClick={handleRemoveResident}
+                disabled={updating || (occupancyData && occupancyData.residents_count <= 0)}
+                className="px-8 py-4 text-lg bg-gray-600 hover:bg-gray-700 text-white disabled:bg-gray-400"
               >
-                Remover Residente
+                {updating ? '⏳ Procesando...' : '➖ Remover Residente'}
               </Button>
             </div>
           </CardContent>
-          <CardFooter className="bg-gray-50 border-t">
-            <div className="w-full text-center text-sm text-gray-500">
-              {totalInside === 0 ? (
+          <CardFooter className="bg-gray-50 border-t border-gray-200">
+            <div className="w-full text-center text-sm text-gray-600">
+              {occupancyData?.total_count === 0 ? (
                 <p>El edificio está vacío</p>
-              ) : totalInside >= maxOccupancy ? (
-                <p className="text-red-500 font-medium">¡Aforo máximo alcanzado! No se permiten más entradas.</p>
+              ) : occupancyData && occupancyData.total_count >= occupancyData.max_capacity ? (
+                <p className="text-red-600 font-medium">¡Aforo máximo alcanzado! No se permiten más entradas.</p>
               ) : occupancyPercentage >= 80 ? (
                 <p className="text-yellow-600">El edificio está llegando a su capacidad máxima</p>
               ) : (
                 <p>Aforo en niveles normales</p>
               )}
+              
+              {/* Indicador de actualización en tiempo real */}
+              <div className="mt-2 flex items-center justify-center text-xs text-gray-500">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2"></div>
+                Datos en tiempo real
+              </div>
             </div>
           </CardFooter>
         </Card>
+
+        {/* Información adicional */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h4 className="text-sm font-medium text-blue-800">Sistema de Aforo Persistente</h4>
+              <div className="text-sm text-blue-700 mt-1">
+                <p>• Los datos se almacenan en la base de datos y persisten entre sesiones</p>
+                <p>• El conteo de visitantes se actualiza automáticamente al escanear QR</p>
+                <p>• Los residentes se gestionan manualmente desde este panel</p>
+                <p>• La información se actualiza en tiempo real cada 5 segundos</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

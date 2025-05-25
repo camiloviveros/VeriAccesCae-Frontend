@@ -9,11 +9,7 @@ import { Button } from '../../../../components/ui/Button';
 import { Alert, AlertTitle } from '../../../../components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../../../components/ui/Card';
 import { Badge } from '../../../../components/ui/Badge';
-
-// Tipos para el scanner
-interface ScanResult {
-  text: string;
-}
+import jsQR from 'jsqr';
 
 interface VisitorInfo {
   id: number;
@@ -37,6 +33,7 @@ export default function ScanQRPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Verificar soporte para getUserMedia
   useEffect(() => {
@@ -47,17 +44,26 @@ export default function ScanQRPage() {
     );
   }, []);
 
+  // Limpiar recursos al desmontar
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
   // Función para iniciar la cámara
   const startCamera = async () => {
     try {
       setError('');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'environment', // Usar cámara trasera si está disponible
+          facingMode: 'environment',
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
       });
+
+      streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -73,11 +79,15 @@ export default function ScanQRPage() {
 
   // Función para detener la cámara
   const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    
     setCameraActive(false);
     stopScanning();
   };
@@ -100,22 +110,23 @@ export default function ScanQRPage() {
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
           try {
-            // Aquí usaríamos una librería como jsQR para detectar códigos QR
-            // Por simplicidad, vamos a simular la detección
             const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            const qrCode = await detectQRCode(imageData);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'dontInvert',
+            });
             
-            if (qrCode) {
-              setQrValue(qrCode);
-              await validateQR(qrCode);
-              stopCamera(); // Detener cámara después de detectar QR
+            if (code) {
+              console.log('QR Code detected:', code.data);
+              setQrValue(code.data);
+              await validateQR(code.data);
+              stopCamera();
             }
           } catch (error) {
-            // Error en detección, continuar escaneando
+            // Continue scanning
           }
         }
       }
-    }, 500); // Escanear cada 500ms
+    }, 100);
   };
 
   // Función para detener el escaneo
@@ -125,20 +136,6 @@ export default function ScanQRPage() {
       scanIntervalRef.current = null;
     }
   };
-
-  // Función simulada para detectar QR (en producción usar jsQR o similar)
-  const detectQRCode = async (imageData: ImageData): Promise<string | null> => {
-    // Esta función debería usar una librería como jsQR
-    // Por ahora retornamos null para que use el input manual
-    return null;
-  };
-
-  // Limpiar recursos al desmontar el componente
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
 
   const handleQRInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQrValue(e.target.value);
@@ -158,7 +155,6 @@ export default function ScanQRPage() {
     setVisitorInfo(null);
     
     try {
-      // En un escenario real, se enviaría el código QR escaneado
       const accessPointId = 1; // ID del punto de acceso actual
       
       const response = await accessService.validateQR({
@@ -173,7 +169,11 @@ export default function ScanQRPage() {
         // Actualizar los contadores y estados en tiempo real
         window.dispatchEvent(new Event('visitorStatusChanged'));
         
-        // Limpiar el código QR después de procesarlo
+        // Reproducir sonido de éxito
+        const audio = new Audio('/sounds/success.mp3');
+        audio.play().catch(() => {});
+        
+        // Limpiar después de 5 segundos
         setTimeout(() => {
           setQrValue('');
           setVisitorInfo(null);
@@ -182,7 +182,11 @@ export default function ScanQRPage() {
         
       } else {
         setError(`❌ Acceso denegado: ${response.reason}`);
-        // Limpiar el código después de un intento fallido
+        
+        // Reproducir sonido de error
+        const audio = new Audio('/sounds/error.mp3');
+        audio.play().catch(() => {});
+        
         setTimeout(() => {
           setQrValue('');
           setError('');
@@ -202,7 +206,6 @@ export default function ScanQRPage() {
       
       setError(errorMessage);
       
-      // Limpiar el código después de un error
       setTimeout(() => {
         setQrValue('');
         setError('');
@@ -224,7 +227,7 @@ export default function ScanQRPage() {
             <Button 
               onClick={() => router.push('/access/control')}
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-2 focus:ring-gray-300"
             >
               ← Volver al Control de Acceso
             </Button>
@@ -233,27 +236,27 @@ export default function ScanQRPage() {
         </div>
         
         {error && (
-          <Alert variant="error">
-            <AlertTitle>Error</AlertTitle>
-            {error}
+          <Alert variant="error" className="border-red-300 bg-red-50">
+            <AlertTitle className="text-red-800">Error</AlertTitle>
+            <p className="text-red-700">{error}</p>
           </Alert>
         )}
         
         {success && (
-          <Alert variant="success">
-            <AlertTitle>Éxito</AlertTitle>
-            {success}
+          <Alert variant="success" className="border-green-300 bg-green-50">
+            <AlertTitle className="text-green-800">Éxito</AlertTitle>
+            <p className="text-green-700">{success}</p>
           </Alert>
         )}
         
         {/* Scanner de Cámara */}
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+        <Card className="bg-white border-gray-200 shadow-lg">
+          <CardHeader className="border-b border-gray-200 bg-gray-50">
+            <CardTitle className="flex items-center space-x-2 text-gray-800">
               <span>📷</span>
               <span>Scanner de Cámara</span>
               {cameraActive && (
-                <Badge className="bg-green-500 text-white">
+                <Badge className="bg-green-500 text-white border-green-600">
                   <div className="flex items-center space-x-1">
                     <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                     <span>Escaneando</span>
@@ -262,11 +265,10 @@ export default function ScanQRPage() {
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             {scannerSupported ? (
               <div className="space-y-4">
                 <div className="relative">
-                  {/* Video para mostrar la cámara */}
                   <video
                     ref={videoRef}
                     className={`w-full max-w-md mx-auto rounded-lg border-2 ${
@@ -277,13 +279,11 @@ export default function ScanQRPage() {
                     muted
                   />
                   
-                  {/* Canvas oculto para procesar frames */}
                   <canvas
                     ref={canvasRef}
                     style={{ display: 'none' }}
                   />
                   
-                  {/* Placeholder cuando la cámara no está activa */}
                   {!cameraActive && (
                     <div className="w-full max-w-md mx-auto h-64 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
                       <div className="text-center">
@@ -291,17 +291,16 @@ export default function ScanQRPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <p className="mt-2 text-sm text-gray-500">Activar cámara para escanear</p>
+                        <p className="mt-2 text-sm text-gray-600">Activar cámara para escanear</p>
                       </div>
                     </div>
                   )}
                   
-                  {/* Overlay de marco de escaneo */}
                   {cameraActive && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-48 h-48 border-4 border-green-500 rounded-lg shadow-lg bg-transparent">
                         <div className="w-full h-full border-2 border-dashed border-green-300 rounded-lg flex items-center justify-center">
-                          <span className="text-green-500 text-sm font-medium bg-white px-2 py-1 rounded">
+                          <span className="text-green-600 text-sm font-medium bg-white px-2 py-1 rounded shadow">
                             Apunte al código QR
                           </span>
                         </div>
@@ -314,7 +313,7 @@ export default function ScanQRPage() {
                   {!cameraActive ? (
                     <Button
                       onClick={startCamera}
-                      className="bg-green-600 hover:bg-green-700 text-white"
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 shadow"
                       disabled={loading}
                     >
                       📷 Activar Cámara
@@ -323,6 +322,7 @@ export default function ScanQRPage() {
                     <Button
                       onClick={stopCamera}
                       variant="destructive"
+                      className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 shadow"
                       disabled={loading}
                     >
                       ⏹️ Detener Cámara
@@ -333,23 +333,23 @@ export default function ScanQRPage() {
             ) : (
               <div className="text-center py-8">
                 <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                 </svg>
-                <p className="mt-2 text-sm text-gray-500">La cámara no está disponible en este dispositivo</p>
+                <p className="mt-2 text-sm text-gray-600">La cámara no está disponible en este dispositivo</p>
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Input Manual */}
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle>⌨️ Ingreso Manual de Código QR</CardTitle>
+        <Card className="bg-white border-gray-200 shadow-lg">
+          <CardHeader className="border-b border-gray-200 bg-gray-50">
+            <CardTitle className="text-gray-800">⌨️ Ingreso Manual de Código QR</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <div className="space-y-4">
               <div>
-                <label htmlFor="qr_code" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="qr_code" className="block text-sm font-medium text-gray-700 mb-1">
                   Código QR
                 </label>
                 <div className="mt-1 flex rounded-md shadow-sm">
@@ -359,13 +359,13 @@ export default function ScanQRPage() {
                     id="qr_code"
                     value={qrValue}
                     onChange={handleQRInput}
-                    className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-l-md border-gray-300 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    className="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-md border border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Pegue o escriba el código QR aquí"
                   />
                   <Button
                     onClick={handleManualValidation}
                     disabled={loading || !qrValue}
-                    className="inline-flex items-center px-4 py-2 rounded-r-md border border-l-0 border-gray-300 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="inline-flex items-center px-4 py-2 rounded-r-md border border-l-0 border-gray-300 bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {loading ? '⏳' : '🔍'} Validar
                   </Button>
@@ -377,16 +377,16 @@ export default function ScanQRPage() {
         
         {/* Información del Visitante */}
         {visitorInfo && (
-          <Card className="bg-white border-green-200">
-            <CardHeader className="bg-green-50">
+          <Card className="bg-white border-green-300 shadow-lg">
+            <CardHeader className="bg-green-50 border-b border-green-200">
               <CardTitle className="text-green-800">✅ Información del Visitante Autorizado</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                <div className="bg-green-100 p-4 rounded-md">
+                <div className="bg-green-100 p-4 rounded-md border border-green-200">
                   <div className="flex">
                     <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                     </div>
@@ -397,45 +397,45 @@ export default function ScanQRPage() {
                   </div>
                 </div>
                 
-                <div className="border-t border-b py-4">
+                <div className="border-t border-b border-gray-200 py-4">
                   <dl className="divide-y divide-gray-200">
                     <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">Nombre</dt>
+                      <dt className="text-sm font-medium text-gray-600">Nombre</dt>
                       <dd className="text-sm text-gray-900 col-span-2">{visitorInfo.name}</dd>
                     </div>
                     {visitorInfo.company && (
                       <div className="py-3 grid grid-cols-3 gap-4">
-                        <dt className="text-sm font-medium text-gray-500">Empresa</dt>
+                        <dt className="text-sm font-medium text-gray-600">Empresa</dt>
                         <dd className="text-sm text-gray-900 col-span-2">{visitorInfo.company}</dd>
                       </div>
                     )}
                     {visitorInfo.apartment_number && (
                       <div className="py-3 grid grid-cols-3 gap-4">
-                        <dt className="text-sm font-medium text-gray-500">Apartamento</dt>
+                        <dt className="text-sm font-medium text-gray-600">Apartamento</dt>
                         <dd className="text-sm text-gray-900 col-span-2">{visitorInfo.apartment_number}</dd>
                       </div>
                     )}
                     {visitorInfo.host && (
                       <div className="py-3 grid grid-cols-3 gap-4">
-                        <dt className="text-sm font-medium text-gray-500">Anfitrión</dt>
+                        <dt className="text-sm font-medium text-gray-600">Anfitrión</dt>
                         <dd className="text-sm text-gray-900 col-span-2">{visitorInfo.host}</dd>
                       </div>
                     )}
                     {visitorInfo.purpose && (
                       <div className="py-3 grid grid-cols-3 gap-4">
-                        <dt className="text-sm font-medium text-gray-500">Propósito</dt>
+                        <dt className="text-sm font-medium text-gray-600">Propósito</dt>
                         <dd className="text-sm text-gray-900 col-span-2">{visitorInfo.purpose}</dd>
                       </div>
                     )}
                     <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">Hora de acceso</dt>
+                      <dt className="text-sm font-medium text-gray-600">Hora de acceso</dt>
                       <dd className="text-sm text-gray-900 col-span-2">{new Date().toLocaleString()}</dd>
                     </div>
                   </dl>
                 </div>
               </div>
             </CardContent>
-            <CardFooter className="bg-green-50 px-4 py-4 sm:px-6">
+            <CardFooter className="bg-green-50 px-4 py-4 sm:px-6 border-t border-green-200">
               <div className="text-sm text-center w-full">
                 <Badge variant="success" className="text-sm px-4 py-2 bg-green-600 text-white">
                   ✅ ENTRADA AUTORIZADA Y REGISTRADA
@@ -446,7 +446,7 @@ export default function ScanQRPage() {
         )}
 
         {/* Instrucciones */}
-        <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 shadow">
           <h4 className="text-lg font-medium text-blue-900 mb-3">
             📋 Instrucciones de Uso
           </h4>
@@ -470,7 +470,7 @@ export default function ScanQRPage() {
               </ul>
             </div>
           </div>
-          <div className="mt-4 p-3 bg-blue-100 rounded-md">
+          <div className="mt-4 p-3 bg-blue-100 rounded-md border border-blue-300">
             <p className="text-sm text-blue-800">
               <strong>Importante:</strong> Solo se aceptarán códigos QR de visitantes que hayan sido previamente aprobados por administración.
             </p>
