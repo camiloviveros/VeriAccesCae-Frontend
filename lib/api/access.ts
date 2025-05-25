@@ -58,7 +58,7 @@ export interface VisitorResponse {
   apartment_number?: string;
   entry_date?: string;
   exit_date?: string;
-  status?: 'pending' | 'inside' | 'outside' | 'denied';
+  status?: 'pending' | 'approved' | 'inside' | 'outside' | 'denied';
   created_at: string;
   [key: string]: any;
 }
@@ -105,6 +105,14 @@ export interface QRCodeResponse {
   qr_code_image: string;
 }
 
+export interface BuildingOccupancyResponse {
+  id: number;
+  residents_count: number;
+  visitors_count: number;
+  total_count: number;
+  max_capacity: number;
+  last_updated: string;
+}
 
 export const getAccessPoints = async (): Promise<AccessPointResponse[] | PaginatedResponse<AccessPointResponse>> => {
   try {
@@ -174,6 +182,18 @@ export const getAccessLogs = async (params: Record<string, any> = {}): Promise<A
   } catch (error: unknown) {
     console.error("Error getting access logs:", error);
     // Devolver un array vacío en caso de error para evitar errores en cascada
+    return [];
+  }
+};
+
+export const getRecentAccessLogs = async (limit: number = 10): Promise<AccessLogResponse[]> => {
+  try {
+    const response = await apiClient.get<AccessLogResponse[]>('/access/access-logs/recent/', { 
+      params: { limit } 
+    });
+    return response.data;
+  } catch (error: unknown) {
+    console.error("Error getting recent access logs:", error);
     return [];
   }
 };
@@ -395,6 +415,29 @@ export const remoteControl = async (id: string | number, action: 'lock' | 'unloc
     return response.data;
   } catch (error: unknown) {
     console.error(`Error in remote control (${action}):`, error);
+    throw error;
+  }
+};
+
+// Nuevas funciones para BuildingOccupancy
+export const getCurrentOccupancy = async (): Promise<BuildingOccupancyResponse> => {
+  try {
+    const response = await apiClient.get<BuildingOccupancyResponse>('/access/occupancy/current/');
+    return response.data;
+  } catch (error: unknown) {
+    console.error("Error getting current occupancy:", error);
+    throw error;
+  }
+};
+
+export const updateResidentsCount = async (residents_count: number): Promise<BuildingOccupancyResponse> => {
+  try {
+    const response = await apiClient.post<BuildingOccupancyResponse>('/access/occupancy/update_residents/', {
+      residents_count
+    });
+    return response.data;
+  } catch (error: unknown) {
+    console.error("Error updating residents count:", error);
     throw error;
   }
 };
