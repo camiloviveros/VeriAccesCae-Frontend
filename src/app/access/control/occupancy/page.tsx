@@ -198,7 +198,7 @@ export default function OccupancyControlPage() {
             <div className="flex justify-center space-x-6 mt-8">
               <Button
                 onClick={handleAddResident}
-                disabled={updating || (occupancyData && occupancyData.total_count >= occupancyData.max_capacity)}
+                disabled={updating || (occupancyData?.total_count ?? 0) >= (occupancyData?.max_capacity ?? 0)}
                 className="px-8 py-4 text-lg bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400"
               >
                 {updating ? '⏳ Procesando...' : '➕ Agregar Residente'}
@@ -206,7 +206,7 @@ export default function OccupancyControlPage() {
               <Button 
                 variant="secondary"
                 onClick={handleRemoveResident}
-                disabled={updating || (occupancyData && occupancyData.residents_count <= 0)}
+                disabled={updating || (occupancyData?.residents_count ?? 0) <= 0}
                 className="px-8 py-4 text-lg bg-gray-600 hover:bg-gray-700 text-white disabled:bg-gray-400"
               >
                 {updating ? '⏳ Procesando...' : '➖ Remover Residente'}
