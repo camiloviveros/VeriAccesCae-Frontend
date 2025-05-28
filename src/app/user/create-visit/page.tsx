@@ -1,4 +1,3 @@
-// src/app/user/create-visit/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -20,6 +19,7 @@ export default function CreateVisitPage() {
     apartment_number: '',
     entry_date: '',
     exit_date: '',
+    description: '', // NUEVO CAMPO
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -44,7 +44,7 @@ export default function CreateVisitPage() {
     }));
   }, [router]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -67,6 +67,7 @@ export default function CreateVisitPage() {
         phone: formData.phone,
         visitor_type: selectedType,
         status: 'pending',
+        description: formData.description, // INCLUIR DESCRIPCIÓN
       };
       
       // Add type-specific fields
@@ -113,7 +114,7 @@ export default function CreateVisitPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       {/* Navbar */}
       <nav className="bg-blue-600 shadow-sm text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -393,6 +394,27 @@ export default function CreateVisitPage() {
                       </div>
                     </>
                   )}
+
+                  {/* NUEVO CAMPO DE DESCRIPCIÓN */}
+                  <div className="sm:col-span-6">
+                    <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                      Descripción o Motivo de la Visita (Opcional)
+                    </label>
+                    <div className="mt-1">
+                      <textarea
+                        name="description"
+                        id="description"
+                        rows={3}
+                        value={formData.description}
+                        onChange={handleChange}
+                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder="Proporcione detalles adicionales sobre el motivo de la visita (opcional)"
+                      />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Esta información ayudará al administrador a evaluar su solicitud.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Information box */}

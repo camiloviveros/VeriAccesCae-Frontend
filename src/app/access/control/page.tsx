@@ -23,6 +23,13 @@ interface Visitor {
   entry_date?: string;
   exit_date?: string;
   status?: 'pending' | 'approved' | 'inside' | 'outside' | 'denied';
+  description?: string;
+  created_by?: number;
+  created_by_detail?: {
+    id: number;
+    username: string;
+    full_name?: string;
+  };
 }
 
 const parseVisitorStatus = (status?: string): 'pending' | 'approved' | 'inside' | 'outside' | 'denied' => {
@@ -48,6 +55,7 @@ export default function AccessControlPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
   const [peopleInside, setPeopleInside] = useState<Visitor[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetchVisitors();
@@ -99,9 +107,20 @@ export default function AccessControlPage() {
     }
   };
 
+  const toggleDescription = (id: number) => {
+    setExpandedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
   // Función para eliminar visitante SIN confirmación
   const handleDeleteVisitor = async (visitor: Visitor) => {
-    // No permitir eliminar si el visitante está dentro
     if (visitor.status === 'inside') {
       setError('No se puede eliminar un visitante que está dentro del edificio. Debe registrar su salida primero.');
       return;
@@ -110,7 +129,6 @@ export default function AccessControlPage() {
     const visitorName = `${visitor.first_name} ${visitor.last_name}`;
     const visitorId = visitor.id;
     
-    // Evitar múltiples eliminaciones simultáneas
     if (processingIds.has(visitorId)) return;
     
     setProcessingIds(prev => new Set(prev).add(visitorId));
@@ -119,25 +137,19 @@ export default function AccessControlPage() {
     try {
       console.log(`🗑️ Eliminando visitante ID ${visitorId}: ${visitorName}`);
       
-      // Eliminar visitante del backend
       await accessService.deleteVisitor(visitorId.toString());
       console.log(`✅ Visitante ${visitorId} eliminado del backend exitosamente`);
       
-      // Actualizar estado local inmediatamente
       const updatedVisitors = visitors.filter(v => v.id !== visitorId);
       setVisitors(updatedVisitors);
       
-      // Actualizar visitantes dentro si el visitante estaba dentro
       const updatedPeopleInside = updatedVisitors.filter(v => v.status === 'inside');
       setPeopleInside(updatedPeopleInside);
       
-      // Mostrar mensaje de éxito
       setSuccessMessage(`✅ Visitante ${visitorName} eliminado correctamente`);
       
-      // Notificar otros componentes
       window.dispatchEvent(new Event('visitorDeleted'));
       
-      // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccessMessage(''), 3000);
       
       console.log(`✅ Eliminación completada exitosamente: ${visitorName}`);
@@ -177,16 +189,50 @@ export default function AccessControlPage() {
     }
   };
 
-  // Función para permitir acceso - CORREGIDA: Solo da permiso para generar QR
+  // Función para permitir acceso - Para visitantes creados desde admin
   const handleAllowAccess = async (visitor: Visitor) => {
     if (!visitor || processingIds.has(visitor.id)) return;
     
     setProcessingIds(prev => new Set(prev).add(visitor.id));
     
     try {
-      console.log(`✅ Dando permiso de acceso a: ${visitor.first_name} ${visitor.last_name}`);
+      console.log(`✅ Permitiendo acceso a: ${visitor.first_name} ${visitor.last_name}`);
       
-      // Cambiar estado a 'approved' para permitir generación de QR
+      // Cambiar estado a 'inside' para visitantes creados desde admin
+      await accessService.updateVisitorStatus(visitor.id, 'inside');
+      
+      const updatedVisitors = visitors.map(v => 
+        v.id === visitor.id ? {...v, status: 'inside' as const} : v
+      );
+      setVisitors(updatedVisitors);
+      setPeopleInside(updatedVisitors.filter(v => v.status === 'inside'));
+      
+      setSuccessMessage(`✅ Acceso permitido a ${visitor.first_name} ${visitor.last_name}. El visitante está dentro del edificio.`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+      
+      window.dispatchEvent(new Event('visitorStatusChanged'));
+    } catch (err) {
+      console.error('❌ Error permitiendo acceso:', err);
+      setError('Error al permitir acceso al visitante');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(visitor.id);
+        return newSet;
+      });
+    }
+  };
+
+  // Función para aprobar solicitud - Para visitantes creados desde usuario
+  const handleApproveRequest = async (visitor: Visitor) => {
+    if (!visitor || processingIds.has(visitor.id)) return;
+    
+    setProcessingIds(prev => new Set(prev).add(visitor.id));
+    
+    try {
+      console.log(`✅ Aprobando solicitud de: ${visitor.first_name} ${visitor.last_name}`);
+      
+      // Cambiar estado a 'approved' para visitantes creados desde usuario
       await accessService.updateVisitorStatus(visitor.id, 'approved');
       
       const updatedVisitors = visitors.map(v => 
@@ -194,13 +240,13 @@ export default function AccessControlPage() {
       );
       setVisitors(updatedVisitors);
       
-      setSuccessMessage(`✅ Permiso concedido a ${visitor.first_name} ${visitor.last_name}. Ahora puede generar código QR.`);
+      setSuccessMessage(`✅ Solicitud aprobada para ${visitor.first_name} ${visitor.last_name}. El usuario puede generar el código QR.`);
       setTimeout(() => setSuccessMessage(''), 3000);
       
       window.dispatchEvent(new Event('visitorStatusChanged'));
     } catch (err) {
-      console.error('❌ Error concediendo permiso:', err);
-      setError('Error al conceder permiso al visitante');
+      console.error('❌ Error aprobando solicitud:', err);
+      setError('Error al aprobar la solicitud del visitante');
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
@@ -299,6 +345,11 @@ export default function AccessControlPage() {
     setTimeout(() => setSuccessMessage(''), 2000);
   };
 
+  // Función para determinar si es un visitante creado por usuario
+  const isUserCreatedVisitor = (visitor: Visitor): boolean => {
+    return visitor.created_by !== null && visitor.created_by !== undefined;
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -366,7 +417,7 @@ export default function AccessControlPage() {
           <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">Gestión de Visitantes</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Apruebe, deniegue o elimine visitantes desde este panel de control.
+              Apruebe, deniegue o controle el acceso de visitantes desde este panel.
             </p>
           </div>
           
@@ -378,111 +429,165 @@ export default function AccessControlPage() {
             <ul className="divide-y divide-gray-200">
               {visitors.map((visitor) => (
                 <li key={`visitor-${visitor.id}`} className="px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-gray-100">
-                        {visitor.photo ? (
-                          <img 
-                            src={visitor.photo}
-                            alt={`${visitor.first_name} ${visitor.last_name}`}
-                            className="h-12 w-12 object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              const parent = (e.target as HTMLImageElement).parentElement;
-                              if (parent) {
-                                parent.innerHTML = `<svg class="h-full w-full text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>`;
-                              }
-                            }}
-                          />
-                        ) : (
-                          <svg className="h-full w-full text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="ml-4">
-                        <div className="flex items-center space-x-2">
-                          <h3 className="text-sm font-medium text-gray-900">
-                            {visitor.first_name} {visitor.last_name}
-                          </h3>
-                          {getStatusBadge(visitor.status)}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          <p>
-                            ID: {visitor.id} | 
-                            Tipo: {visitor.visitor_type ? 
-                              (visitor.visitor_type === 'temporary' ? 'Temporal' : 
-                               visitor.visitor_type === 'business' ? 'Empresarial' : 'Regular') 
-                              : 'Regular'}
-                          </p>
-                          {visitor.company && <p>Empresa: {visitor.company}</p>}
-                          {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
-                          {visitor.phone && <p>Teléfono: {visitor.phone}</p>}
-                          {visitor.entry_date && visitor.exit_date && (
-                            <p>Válido: {new Date(visitor.entry_date).toLocaleDateString()} - {new Date(visitor.exit_date).toLocaleDateString()}</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-12 w-12 rounded-full overflow-hidden bg-gray-100">
+                          {visitor.photo ? (
+                            <img 
+                              src={visitor.photo}
+                              alt={`${visitor.first_name} ${visitor.last_name}`}
+                              className="h-12 w-12 object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                const parent = (e.target as HTMLImageElement).parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `<svg class="h-full w-full text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                                  </svg>`;
+                                }
+                              }}
+                            />
+                          ) : (
+                            <svg className="h-full w-full text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
                           )}
                         </div>
+                        <div className="ml-4">
+                          <div className="flex items-center space-x-2">
+                            <h3 className="text-sm font-medium text-gray-900">
+                              {visitor.first_name} {visitor.last_name}
+                            </h3>
+                            {getStatusBadge(visitor.status)}
+                            {isUserCreatedVisitor(visitor) && (
+                              <Badge className="bg-purple-500 text-white">Solicitud Usuario</Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <p>
+                              ID: {visitor.id} | 
+                              Tipo: {visitor.visitor_type ? 
+                                (visitor.visitor_type === 'temporary' ? 'Temporal' : 
+                                 visitor.visitor_type === 'business' ? 'Empresarial' : 'Regular') 
+                                : 'Regular'}
+                            </p>
+                            {visitor.company && <p>Empresa: {visitor.company}</p>}
+                            {visitor.apartment_number && <p>Apartamento: {visitor.apartment_number}</p>}
+                            {visitor.phone && <p>Teléfono: {visitor.phone}</p>}
+                            {visitor.entry_date && visitor.exit_date && (
+                              <p>Válido: {new Date(visitor.entry_date).toLocaleDateString()} - {new Date(visitor.exit_date).toLocaleDateString()}</p>
+                            )}
+                            {visitor.created_by_detail && (
+                              <p className="text-purple-600">
+                                Solicitado por: {visitor.created_by_detail.full_name || visitor.created_by_detail.username}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        {/* Botones para visitantes creados desde admin (sin created_by) */}
+                        {!isUserCreatedVisitor(visitor) && visitor.status === 'pending' && (
+                          <>
+                            <Button 
+                              onClick={() => handleAllowAccess(visitor)}
+                              variant="default"
+                              size="sm"
+                              disabled={processingIds.has(visitor.id)}
+                              className="bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400"
+                              title={`Permitir acceso a ${visitor.first_name} ${visitor.last_name}`}
+                            >
+                              {processingIds.has(visitor.id) ? '⏳' : '✅'} Permitir
+                            </Button>
+                            <Button 
+                              onClick={() => handleDenyAccess(visitor)}
+                              variant="destructive"
+                              size="sm"
+                              disabled={processingIds.has(visitor.id)}
+                              className="bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400"
+                              title={`Denegar acceso a ${visitor.first_name} ${visitor.last_name}`}
+                            >
+                              {processingIds.has(visitor.id) ? '⏳' : '❌'} Denegar
+                            </Button>
+                          </>
+                        )}
+                        
+                        {/* Botones para visitantes creados desde usuario (con created_by) */}
+                        {isUserCreatedVisitor(visitor) && visitor.status === 'pending' && (
+                          <>
+                            <Button 
+                              onClick={() => handleApproveRequest(visitor)}
+                              variant="default"
+                              size="sm"
+                              disabled={processingIds.has(visitor.id)}
+                              className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400"
+                              title={`Aprobar solicitud de ${visitor.first_name} ${visitor.last_name}`}
+                            >
+                              {processingIds.has(visitor.id) ? '⏳' : '✅'} Aprobar Solicitud
+                            </Button>
+                            <Button 
+                              onClick={() => handleDenyAccess(visitor)}
+                              variant="destructive"
+                              size="sm"
+                              disabled={processingIds.has(visitor.id)}
+                              className="bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400"
+                              title={`Denegar solicitud de ${visitor.first_name} ${visitor.last_name}`}
+                            >
+                              {processingIds.has(visitor.id) ? '⏳' : '❌'} Denegar
+                            </Button>
+                          </>
+                        )}
+                        
+                        {visitor.status === 'inside' && (
+                          <Button 
+                            onClick={() => handleExitBuilding(visitor)}
+                            variant="secondary"
+                            size="sm"
+                            disabled={processingIds.has(visitor.id)}
+                            className="bg-yellow-500 text-white hover:bg-yellow-600 disabled:bg-gray-400"
+                            title={`Registrar salida de ${visitor.first_name} ${visitor.last_name}`}
+                          >
+                            {processingIds.has(visitor.id) ? '⏳' : '🏃'} Salió
+                          </Button>
+                        )}
+                        
+                        <Button 
+                          onClick={() => handleDeleteVisitor(visitor)}
+                          variant="outline"
+                          size="sm"
+                          className={visitor.status === 'inside' ? 
+                            "border-gray-300 text-gray-400 cursor-not-allowed" :
+                            "border-red-400 text-red-600 hover:bg-red-50 hover:border-red-500"
+                          }
+                          title={visitor.status === 'inside' ? 
+                            "No se puede eliminar un visitante que está dentro del edificio" :
+                            `Eliminar visitante ${visitor.first_name} ${visitor.last_name}`
+                          }
+                          disabled={processingIds.has(visitor.id) || visitor.status === 'inside'}
+                        >
+                          {processingIds.has(visitor.id) ? '⏳' : '🗑️'} Eliminar
+                        </Button>
                       </div>
                     </div>
                     
-                    <div className="flex items-center space-x-2">
-                      {visitor.status === 'pending' && (
-                        <>
-                          <Button 
-                            onClick={() => handleAllowAccess(visitor)}
-                            variant="default"
-                            size="sm"
-                            disabled={processingIds.has(visitor.id)}
-                            className="bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400"
-                            title={`Dar permiso a ${visitor.first_name} ${visitor.last_name}`}
-                          >
-                            {processingIds.has(visitor.id) ? '⏳' : '✅'} Dar Permiso
-                          </Button>
-                          <Button 
-                            onClick={() => handleDenyAccess(visitor)}
-                            variant="destructive"
-                            size="sm"
-                            disabled={processingIds.has(visitor.id)}
-                            className="bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400"
-                            title={`Denegar acceso a ${visitor.first_name} ${visitor.last_name}`}
-                          >
-                            {processingIds.has(visitor.id) ? '⏳' : '❌'} Denegar
-                          </Button>
-                        </>
-                      )}
-                      
-                      {visitor.status === 'inside' && (
-                        <Button 
-                          onClick={() => handleExitBuilding(visitor)}
-                          variant="secondary"
-                          size="sm"
-                          disabled={processingIds.has(visitor.id)}
-                          className="bg-yellow-500 text-white hover:bg-yellow-600 disabled:bg-gray-400"
-                          title={`Registrar salida de ${visitor.first_name} ${visitor.last_name}`}
+                    {/* Mostrar descripción si existe */}
+                    {visitor.description && (
+                      <div className="mt-2">
+                        <button
+                          onClick={() => toggleDescription(visitor.id)}
+                          className="text-sm text-blue-600 hover:text-blue-800"
                         >
-                          {processingIds.has(visitor.id) ? '⏳' : '🏃'} Salió
-                        </Button>
-                      )}
-                      
-                      <Button 
-                        onClick={() => handleDeleteVisitor(visitor)}
-                        variant="outline"
-                        size="sm"
-                        className={visitor.status === 'inside' ? 
-                          "border-gray-300 text-gray-400 cursor-not-allowed" :
-                          "border-red-400 text-red-600 hover:bg-red-50 hover:border-red-500"
-                        }
-                        title={visitor.status === 'inside' ? 
-                          "No se puede eliminar un visitante que está dentro del edificio" :
-                          `Eliminar visitante ${visitor.first_name} ${visitor.last_name}`
-                        }
-                        disabled={processingIds.has(visitor.id) || visitor.status === 'inside'}
-                      >
-                        {processingIds.has(visitor.id) ? '⏳' : '🗑️'} Eliminar
-                      </Button>
-                    </div>
+                          {expandedIds.has(visitor.id) ? '▼ Ocultar descripción' : '▶ Ver descripción'}
+                        </button>
+                        {expandedIds.has(visitor.id) && (
+                          <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{visitor.description}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}
@@ -495,7 +600,7 @@ export default function AccessControlPage() {
                 </svg>
               </div>
               <p className="text-lg font-medium mb-2 text-gray-700">No hay visitantes registrados</p>
-              <p className="text-sm text-gray-600">Los visitantes aparecerán aquí cuando sean registrados por los usuarios.</p>
+              <p className="text-sm text-gray-600">Los visitantes aparecerán aquí cuando sean registrados.</p>
             </div>
           )}
         </div>
@@ -557,6 +662,35 @@ export default function AccessControlPage() {
             </ul>
           </div>
         )}
+        
+        {/* Información sobre el proceso */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h4 className="text-sm font-medium text-blue-800">Diferencias entre visitantes</h4>
+              <div className="text-sm text-blue-700 mt-1 space-y-1">
+                <p><strong>Visitantes creados desde administración:</strong></p>
+                <ul className="ml-4 list-disc">
+                  <li>Botones: Permitir, Denegar, Eliminar</li>
+                  <li>"Permitir" = El visitante entra directamente (estado: dentro)</li>
+                  <li>No requieren código QR</li>
+                </ul>
+                <p className="mt-2"><strong>Solicitudes de usuarios (etiqueta morada):</strong></p>
+                <ul className="ml-4 list-disc">
+                  <li>Botones: Aprobar Solicitud, Denegar</li>
+                  <li>"Aprobar Solicitud" = Autoriza al usuario a generar QR</li>
+                  <li>El visitante no entra hasta escanear el QR</li>
+                  <li>Pueden incluir descripción del motivo de visita</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );
