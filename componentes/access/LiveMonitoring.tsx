@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { accessService } from '../../lib/api';
+import React from 'react';
 
 // Definir interfaces para los tipos
 interface UserDetail {

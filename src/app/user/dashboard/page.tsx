@@ -8,6 +8,7 @@ import { Button } from '../../../../components/ui/Button';
 import { Alert, AlertTitle } from '../../../../components/ui/Alert';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
 import { Badge } from '../../../../components/ui/Badge';
+import * as reportService from '../../../../lib/api/reports';
 
 interface Visit {
   id: number;
@@ -45,6 +46,8 @@ export default function UserDashboardPage() {
   const [error, setError] = useState('');
   const [emergencyMessage, setEmergencyMessage] = useState('');
   const [emergencyType, setEmergencyType] = useState('');
+  const [incidentSummary, setIncidentSummary] = useState<any>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in
@@ -64,12 +67,12 @@ export default function UserDashboardPage() {
       }
     }
 
-    fetchMyVisits();
+    fetchDashboardData();
     fetchCurrentUser();
 
     // Listen for changes
     const handleVisitChange = () => {
-      fetchMyVisits();
+      fetchDashboardData();
     };
 
     window.addEventListener('visitorStatusChanged', handleVisitChange);
@@ -81,17 +84,7 @@ export default function UserDashboardPage() {
     };
   }, [router]);
 
-  const fetchCurrentUser = async () => {
-    try {
-      const userData = await authService.getCurrentUser();
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-    } catch (err) {
-      console.error('Error fetching user data:', err);
-    }
-  };
-
-  const fetchMyVisits = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
       const response = await accessService.getVisitors();
@@ -112,16 +105,61 @@ export default function UserDashboardPage() {
       
       setMyVisits(visitsList);
       setPendingVisits(visitsList.filter(v => v.status === 'pending'));
-      
-      // Los visitantes aprobados son aquellos con estado 'approved'
       setApprovedVisits(visitsList.filter(v => v.status === 'approved'));
-      
       setDeniedVisits(visitsList.filter(v => v.status === 'denied'));
+
+      // Obtener resumen de incidentes
+      try {
+        const incidentData = await securityService.getIncidents();
+        setIncidentSummary(incidentData);
+      } catch (err) {
+        console.error('Error fetching incident summary:', err);
+      }
     } catch (err) {
       console.error('Error fetching visits:', err);
       setError('No se pudieron cargar las visitas');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const userData = await authService.getCurrentUser();
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+    }
+  };
+
+  const handleQuickReport = async (period: string) => {
+    try {
+      setIsGeneratingReport(true);
+      
+      // Crear un reporte temporal basado en el período
+      const reportData = {
+        name: `Reporte ${period === 'daily' ? 'Diario' : period === 'weekly' ? 'Semanal' : 'Mensual'} - ${new Date().toLocaleDateString()}`,
+        report_type: 'access_logs',
+        period: period,
+        description: `Reporte automático de ${period === 'daily' ? 'hoy' : period === 'weekly' ? 'la última semana' : 'el último mes'}`
+      };
+      
+      // Crear el reporte
+      const createdReport = await reportService.createReport(reportData);
+      
+      // Generar el reporte
+      const generatedData = await reportService.generateReportWithFormat(createdReport.id, { format: 'json' });
+      
+      // Mostrar los datos (puedes cambiar esto para mostrar en un modal)
+      console.log('Datos del reporte:', generatedData);
+      alert(`Reporte ${period} generado exitosamente. Ver consola para los datos.`);
+      
+    } catch (err) {
+      console.error('Error generating quick report:', err);
+      alert('Error al generar el reporte rápido');
+    } finally {
+      setIsGeneratingReport(false);
     }
   };
 
@@ -191,9 +229,7 @@ export default function UserDashboardPage() {
   // Check if user is admin
   const isAdmin = user?.is_staff || user?.is_superuser || user?.role?.name === 'Administrator';
 
-  // CORREGIDO: Función para determinar si se puede mostrar QR
   const canShowQR = (visit: Visit) => {
-    // Solo se puede mostrar QR si el visitante está aprobado
     return visit.status === 'approved';
   };
 
@@ -301,12 +337,37 @@ export default function UserDashboardPage() {
                     👥 Ver Mis Visitas
                   </Button>
                   {isAdmin && (
-                    <Button 
-                      onClick={() => router.push('/dashboard')}
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                    >
-                      ⚙️ Panel de Administración
-                    </Button>
+                    <>
+                      <Button 
+                        onClick={() => router.push('/dashboard')}
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                      >
+                        ⚙️ Panel de Administración
+                      </Button>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button 
+                          onClick={() => handleQuickReport('daily')}
+                          disabled={isGeneratingReport}
+                          className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                        >
+                          {isGeneratingReport ? 'Generando...' : '📊 Diario'}
+                        </Button>
+                        <Button 
+                          onClick={() => handleQuickReport('weekly')}
+                          disabled={isGeneratingReport}
+                          className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                        >
+                          {isGeneratingReport ? 'Generando...' : '📈 Semanal'}
+                        </Button>
+                        <Button 
+                          onClick={() => handleQuickReport('monthly')}
+                          disabled={isGeneratingReport}
+                          className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                        >
+                          {isGeneratingReport ? 'Generando...' : '📉 Mensual'}
+                        </Button>
+                      </div>
+                    </>
                   )}
                 </div>
               </CardContent>

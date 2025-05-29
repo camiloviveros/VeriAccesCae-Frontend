@@ -92,6 +92,33 @@ export const generateReport = async (reportId: string | number, params: Omit<Rep
   }
 };
 
+export const generateReportWithFormat = async (reportId: string | number, params: { format?: string; period_start?: string; period_end?: string }) => {
+  try {
+    const response = await apiClient.post(`/reports/definitions/${reportId}/generate/`, params, {
+      responseType: params.format === 'csv' || params.format === 'xlsx' ? 'blob' : 'json'
+    });
+    
+    // Si es CSV o Excel, manejar la descarga
+    if (params.format === 'csv' || params.format === 'xlsx') {
+      const blob = new Blob([response.data as ArrayBuffer], { 
+        type: params.format === 'csv' 
+          ? 'text/csv;charset=utf-8;' 
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `reporte_${new Date().toISOString().split('T')[0]}.${params.format}`;
+      link.click();
+      return { success: true };
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error("Error generating report:", error);
+    throw error;
+  }
+};
+
 export const getGeneratedReports = async (reportId?: string | number): Promise<GeneratedReportResponse[] | PaginatedResponse<GeneratedReportResponse>> => {
   try {
     const params = reportId ? { report: reportId } : {};
