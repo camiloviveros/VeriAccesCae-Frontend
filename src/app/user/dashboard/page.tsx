@@ -170,23 +170,50 @@ export default function UserDashboardPage() {
     }
 
     try {
-      await securityService.createIncident({
-        title: `Alerta: ${emergencyType}`,
-        description: emergencyMessage,
-        location: 'Reportado desde dashboard de usuario',
-        severity: emergencyType === 'Emergencia' ? 'high' : 'medium'
+      // Usar el nuevo endpoint para crear alertas
+      const response = await fetch('http://localhost:8000/api/security/incidents/create_alert/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        },
+        body: JSON.stringify({
+          type: emergencyType,
+          message: emergencyMessage
+        })
       });
 
-      setEmergencyMessage('');
-      setEmergencyType('');
-      setError('');
-      alert('Alerta enviada correctamente');
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setEmergencyMessage('');
+        setEmergencyType('');
+        setError('');
+        
+        // Mostrar mensaje de éxito
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+        alertDiv.innerHTML = `
+          <div class="flex items-center">
+            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>¡Alerta enviada correctamente!</span>
+          </div>
+        `;
+        document.body.appendChild(alertDiv);
+        
+        setTimeout(() => {
+          alertDiv.remove();
+        }, 3000);
+      } else {
+        setError(data.message || 'Error al enviar la alerta');
+      }
     } catch (err) {
       console.error('Error sending alert:', err);
       setError('Error al enviar la alerta');
     }
   };
-
   const getStatusBadge = (status?: string) => {
     switch(status) {
       case 'inside':

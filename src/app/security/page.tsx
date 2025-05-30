@@ -41,10 +41,19 @@ function isApiResponse(data: unknown): data is ApiResponse {
     ('results' in data);
 }
 
+
 export default function SecurityPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newIncident, setNewIncident] = useState({
+    title: '',
+    description: '',
+    location: '',
+    severity: 'medium',
+    report_type: 'incident'
+  });
 
   useEffect(() => {
     const fetchIncidents = async () => {
@@ -73,6 +82,25 @@ export default function SecurityPage() {
     fetchIncidents();
   }, []);
 
+  const handleCreateIncident = async () => {
+    try {
+      await securityService.createIncident(newIncident);
+      setShowCreateModal(false);
+      setNewIncident({
+        title: '',
+        description: '',
+        location: '',
+        severity: 'medium',
+        report_type: 'incident'
+      });
+      // Recargar incidentes
+      window.location.reload();
+    } catch (err) {
+      console.error('Error creating incident:', err);
+      alert('Error al crear el reporte');
+    }
+  };
+  
   const getSeverityColor = (severity: string): string => {
     switch (severity.toLowerCase()) {
       case 'critical':

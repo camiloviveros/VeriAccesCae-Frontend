@@ -99,6 +99,16 @@ export const createIncident = async (data: IncidentData): Promise<IncidentRespon
   }
 };
 
+export const createAlert = async (data: { type: string; message: string }): Promise<any> => {
+  try {
+    const response = await apiClient.post('/security/incidents/create_alert/', data);
+    return response.data;
+  } catch (error) {
+    console.error("Error creating alert:", error);
+    throw error;
+  }
+};
+
 export const updateIncident = async (id: string | number, data: Partial<IncidentResponse>): Promise<IncidentResponse> => {
   try {
     const response = await apiClient.patch<IncidentResponse>(`/security/incidents/${id}/`, data);
