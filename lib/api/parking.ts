@@ -124,7 +124,7 @@ export const getVehicle = async (id: string | number): Promise<VehicleResponse> 
 
 export const createVehicle = async (data: VehicleCreateData): Promise<VehicleResponse> => {
   try {
-    let vehicleData = { ...data };
+    const vehicleData = { ...data };
     
     // Si no se proporciona user, obtenerlo del localStorage
     if (!vehicleData.user) {

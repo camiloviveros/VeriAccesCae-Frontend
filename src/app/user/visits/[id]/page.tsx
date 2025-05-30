@@ -17,7 +17,7 @@ interface Visit {
   phone?: string;
   email?: string;
   company?: string;
-  status?: 'pending' | 'inside' | 'outside' | 'denied';
+  status?: 'pending' | 'inside' | 'outside' | 'denied' | 'approved';
   created_at: string;
   visitor_type?: string;
   apartment_number?: string;

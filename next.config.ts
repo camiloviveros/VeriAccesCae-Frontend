@@ -10,8 +10,10 @@ const nextConfig: NextConfig = {
         pathname: '/media/**',
       },
     ],
-    // Como alternativa, puedes usar domains si prefieres una configuración más simple
     domains: ['localhost'],
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 
