@@ -3,11 +3,11 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../../../lib/api';
-import { Alert, AlertTitle } from '../../../../../../components/ui/Alert';
-import { Button } from '../../../../../../components/ui/Button';
-import { Loading } from '../../../../../../components/ui/Loading';
+import DashboardLayout from '../../../../../components/layout/DashboardLayout';
+import { accessService } from '../../../../../lib/api';
+import { Alert, AlertTitle } from '../../../../../components/ui/Alert';
+import { Button } from '../../../../../components/ui/Button';
+import { Loading } from '../../../../../components/ui/Loading';
 
 interface Visitor {
   id: number;

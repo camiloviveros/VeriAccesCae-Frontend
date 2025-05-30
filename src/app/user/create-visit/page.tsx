@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { accessService } from '../../../../lib/api';
-import { Button } from '../../../../components/ui/Button';
-import { Alert, AlertTitle } from '../../../../components/ui/Alert';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
+import { accessService } from '../../../lib/api';
+import { Button } from '../../../components/ui/Button';
+import { Alert, AlertTitle } from '../../../components/ui/Alert';
+import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/Card';
 
 export default function CreateVisitPage() {
   const router = useRouter();

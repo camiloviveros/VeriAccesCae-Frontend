@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '../../../components/layout/DashboardLayout';
-import LiveMonitoring from '../../../componentes/access/LiveMonitoring';
-import { securityService } from '../../../lib/api';
+import DashboardLayout from '../../components/layout/DashboardLayout';
+import LiveMonitoring from '../../componentes/access/LiveMonitoring';
+import { securityService } from '../../lib/api';
 import Link from 'next/link';
 
 // Definición de tipos para los incidentes

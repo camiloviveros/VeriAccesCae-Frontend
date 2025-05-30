@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { authService } from '../../../../lib/api';
-import { Alert, AlertTitle, AlertDescription } from '../../../../components/ui/Alert';
-import { Button } from '../../../../components/ui/Button';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { authService } from '../../../lib/api';
+import { Alert, AlertTitle, AlertDescription } from '../../../components/ui/Alert';
+import { Button } from '../../../components/ui/Button';
 
 interface PasswordFormData {
   current_password: string;

@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { Button } from '../../../../components/ui/Button';
-import { Badge } from '../../../../components/ui/Badge';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
-import { formatDate } from '../../../../lib/utils';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { Button } from '../../../components/ui/Button';
+import { Badge } from '../../../components/ui/Badge';
+import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/Card';
+import { formatDate } from '../../../lib/utils';
 
 interface ReportDetail {
   id: number;

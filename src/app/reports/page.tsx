@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '../../../components/layout/DashboardLayout';
-import * as securityService from '../../../lib/api/security';
+import DashboardLayout from '../../components/layout/DashboardLayout';
+import * as securityService from '../../lib/api/security';
 import Link from 'next/link';
-import { formatDate } from '../../../lib/utils';
-import { Button } from '../../../components/ui/Button';
-import { Alert, AlertTitle } from '../../../components/ui/Alert';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/Card';
-import { Badge } from '../../../components/ui/Badge';
+import { formatDate } from '../../lib/utils';
+import { Button } from '../../components/ui/Button';
+import { Alert, AlertTitle } from '../../components/ui/Alert';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
+import { Badge } from '../../components/ui/Badge';
 
 interface Report {
   id: number;

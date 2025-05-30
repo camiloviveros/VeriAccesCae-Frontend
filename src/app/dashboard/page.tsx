@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '../../../components/layout/DashboardLayout';
-import { accessService } from '../../../lib/api';
-import { Loading } from '../../../components/ui/Loading';
-import { Alert, AlertTitle } from '../../../components/ui/Alert';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/Card';
+import DashboardLayout from '../../components/layout/DashboardLayout';
+import { accessService } from '../../lib/api';
+import { Loading } from '../../components/ui/Loading';
+import { Alert, AlertTitle } from '../../components/ui/Alert';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 
 // Heroicons
 import { 

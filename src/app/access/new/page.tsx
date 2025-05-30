@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../lib/api';
-import { Button } from '../../../../components/ui/Button';
-import { Alert, AlertTitle, AlertDescription } from '../../../../components/ui/Alert';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { accessService } from '../../../lib/api';
+import { Button } from '../../../components/ui/Button';
+import { Alert, AlertTitle, AlertDescription } from '../../../components/ui/Alert';
 
 interface AccessPointFormData {
   name: string;

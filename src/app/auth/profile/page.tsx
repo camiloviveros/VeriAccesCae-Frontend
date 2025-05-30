@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { authService } from '../../../../lib/api';
-import { getCurrentUser } from '../../../../lib/auth';
-import { Alert, AlertTitle, AlertDescription } from '../../../../components/ui/Alert';
-import { Button } from '../../../../components/ui/Button';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { authService } from '../../../lib/api';
+import { getCurrentUser } from '../../../lib/auth';
+import { Alert, AlertTitle, AlertDescription } from '../../../components/ui/Alert';
+import { Button } from '../../../components/ui/Button';
 
 interface User {
   id: number;

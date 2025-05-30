@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import * as reportService from '../../../../lib/api/reports';
-import { Button } from '../../../../components/ui/Button';
-import { Alert, AlertTitle } from '../../../../components/ui/Alert';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import * as reportService from '../../../lib/api/reports';
+import { Button } from '../../../components/ui/Button';
+import { Alert, AlertTitle } from '../../../components/ui/Alert';
+import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/Card';
 
 export default function CreateReportPage() {
   const router = useRouter();

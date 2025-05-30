@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../lib/api';
-import { Button } from '../../../../components/ui/Button';
-import { Alert, AlertTitle } from '../../../../components/ui/Alert';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../../../components/ui/Card';
-import { Badge } from '../../../../components/ui/Badge';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { accessService } from '../../../lib/api';
+import { Button } from '../../../components/ui/Button';
+import { Alert, AlertTitle } from '../../../components/ui/Alert';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../../components/ui/Card';
+import { Badge } from '../../../components/ui/Badge';
 import jsQR from 'jsqr';
 
 interface VisitorInfo {

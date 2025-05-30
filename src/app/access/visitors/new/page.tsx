@@ -1,9 +1,9 @@
 // src/app/access/visitors/new/page.tsx - Página para crear visitantes desde admin
 'use client';
 
-import DashboardLayout from '../../../../../components/layout/DashboardLayout';
+import DashboardLayout from '../../../../components/layout/DashboardLayout';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../../components/ui/Card';
+import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
 
 export default function NewVisitorPage() {
   return (

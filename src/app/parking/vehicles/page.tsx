@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { parkingService } from '../../../../lib/api';
-import { Button } from '../../../../components/ui/Button';
-import { Alert, AlertTitle, AlertDescription } from '../../../../components/ui/Alert';
-import { Loading } from '../../../../components/ui/Loading';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { parkingService } from '../../../lib/api';
+import { Button } from '../../../components/ui/Button';
+import { Alert, AlertTitle, AlertDescription } from '../../../components/ui/Alert';
+import { Loading } from '../../../components/ui/Loading';
 import Link from 'next/link';
-import { formatDate } from '../../../../lib/utils';
+import { formatDate } from '../../../lib/utils';
 
 // Definición de tipos
 interface Vehicle {

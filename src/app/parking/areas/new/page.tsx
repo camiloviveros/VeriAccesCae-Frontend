@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../../components/layout/DashboardLayout';
-import { parkingService } from '../../../../../lib/api';
-import { Button } from '../../../../../components/ui/Button';
-import { Alert, AlertTitle, AlertDescription } from '../../../../../components/ui/Alert';
+import DashboardLayout from '../../../../components/layout/DashboardLayout';
+import { parkingService } from '../../../../lib/api';
+import { Button } from '../../../../components/ui/Button';
+import { Alert, AlertTitle, AlertDescription } from '../../../../components/ui/Alert';
 import Link from 'next/link';
 
 interface FormData {

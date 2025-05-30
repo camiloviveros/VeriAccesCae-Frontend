@@ -3,12 +3,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../../components/layout/DashboardLayout';
-import { Button } from '../../../../../components/ui/Button';
-import { Alert, AlertTitle } from '../../../../../components/ui/Alert';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../../../../components/ui/Card';
-import { accessService } from '../../../../../lib/api';
-import { Loading } from '../../../../../components/ui/Loading';
+import DashboardLayout from '../../../../components/layout/DashboardLayout';
+import { Button } from '../../../../components/ui/Button';
+import { Alert, AlertTitle } from '../../../../components/ui/Alert';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../../../components/ui/Card';
+import { accessService } from '../../../../lib/api';
+import { Loading } from '../../../../components/ui/Loading';
 
 interface OccupancyData {
   id: number;

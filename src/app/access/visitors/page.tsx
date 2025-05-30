@@ -3,12 +3,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../lib/api';
-import { Badge } from '../../../../components/ui/Badge';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
-import { Loading } from '../../../../components/ui/Loading';
-import { Button } from '../../../../components/ui/Button';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { accessService } from '../../../lib/api';
+import { Badge } from '../../../components/ui/Badge';
+import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/Card';
+import { Loading } from '../../../components/ui/Loading';
+import { Button } from '../../../components/ui/Button';
 import Link from 'next/link';
 
 interface Visitor {

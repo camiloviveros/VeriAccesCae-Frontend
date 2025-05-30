@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../components/layout/DashboardLayout';
-import { accessService } from '../../../lib/api'; 
-import { Alert, AlertTitle } from '../../../components/ui/Alert';
-import { Button } from '../../../components/ui/Button';
-import { Loading } from '../../../components/ui/Loading';
-import { Badge } from '../../../components/ui/Badge';
+import DashboardLayout from '../../components/layout/DashboardLayout';
+import { accessService } from '../../lib/api'; 
+import { Alert, AlertTitle } from '../../components/ui/Alert';
+import { Button } from '../../components/ui/Button';
+import { Loading } from '../../components/ui/Loading';
+import { Badge } from '../../components/ui/Badge';
 import Link from 'next/link';
 
 interface Visitor {

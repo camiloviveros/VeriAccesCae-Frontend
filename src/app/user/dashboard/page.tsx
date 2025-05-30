@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { accessService, securityService, authService } from '../../../../lib/api';
-import { Button } from '../../../../components/ui/Button';
-import { Alert, AlertTitle } from '../../../../components/ui/Alert';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../../components/ui/Card';
-import { Badge } from '../../../../components/ui/Badge';
-import * as reportService from '../../../../lib/api/reports';
+import { accessService, securityService, authService } from '../../../lib/api';
+import { Button } from '../../../components/ui/Button';
+import { Alert, AlertTitle } from '../../../components/ui/Alert';
+import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/Card';
+import { Badge } from '../../../components/ui/Badge';
+import * as reportService from '../../../lib/api/reports';
 
 interface Visit {
   id: number;

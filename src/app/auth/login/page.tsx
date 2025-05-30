@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { authService, isCurrentUserAdmin } from '../../../../lib/api/auth';
+import { authService, isCurrentUserAdmin } from '../../../lib/api/auth';
 
 interface LoginResponse {
   access?: string;

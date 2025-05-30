@@ -2,10 +2,10 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import DashboardLayout from '../../../../../../components/layout/DashboardLayout';
-import { accessService } from '../../../../../../lib/api';
-import { Alert, AlertTitle, AlertDescription } from '../../../../../../components/ui/Alert';
-import { Button } from '../../../../../../components/ui/Button';
+import DashboardLayout from '../../../../../components/layout/DashboardLayout';
+import { accessService } from '../../../../../lib/api';
+import { Alert, AlertTitle, AlertDescription } from '../../../../../components/ui/Alert';
+import { Button } from '../../../../../components/ui/Button';
 
 interface FormData {
   first_name: string;
