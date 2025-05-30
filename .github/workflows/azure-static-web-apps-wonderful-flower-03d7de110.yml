@@ -39,7 +39,7 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_WONDERFUL_FLOWER_03D7DE110 }}
           action: "upload"
           app_location: "/"               # Ruta del frontend
-          api_location: " "              # Espacio para evitar detección automática de API
+          api_location: ""              # Espacio para evitar detección automática de API
           output_location: ""            # Deja que Azure detecte la carpeta de salida
           github_id_token: ${{ steps.idtoken.outputs.result }}
           skip_api_build: true           # Omite la construcción de Azure Functions
