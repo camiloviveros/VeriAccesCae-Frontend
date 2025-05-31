@@ -1,7 +1,7 @@
 // components/ui/Alert.tsx
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../lib/utils';
+import { cn } from '../../../src/lib/utils';
 
 const alertVariants = cva(
   'relative w-full rounded-lg border p-4',

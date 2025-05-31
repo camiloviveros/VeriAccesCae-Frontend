@@ -1,4 +1,4 @@
-// src/app/access/visitors/[id]/qr/page.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';

@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '../../lib/api';
-import Notifications from '../ui/Notifications';
+import Notifications from '../../components/ui/Notifications';
 
 // Actualizado la importación de Heroicons
 import { 

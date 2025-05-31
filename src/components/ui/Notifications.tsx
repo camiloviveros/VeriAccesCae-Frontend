@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { BellIcon } from '@heroicons/react/24/outline';
-import { notificationService } from '../../lib/api';
-import { formatDate } from '../../lib/utils';
+import { notificationService } from '../../../src/lib/api';
+import { formatDate } from '../../../src/lib/utils';
 
 interface Notification {
   id: number;
